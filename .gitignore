@@ -14,3 +14,7 @@ jazz-world-logo*.png
 tsconfig.tsbuildinfo
 .agents/
 .claude/
+.vercel
+
+.vercel
+.env*

@@ -130,37 +130,37 @@ committee is a handful of users; the only real peak is submission-deadline day.
 - Front with nginx/Caddy for TLS; set `client_max_body_size 120m` to match the
   upload cap.
 
-## Quick test deploy on Vercel
+## Test deploy: Vercel + Neon
 
-Works for a demo, with three caveats baked in:
+Backend is on **Neon** (`neon.ts` is the source of truth):
 
-1. **No worker on Vercel.** Set `AI_DISABLED=1` — `enqueue()` becomes a no-op, the
-   pg-boss schema is never created, and the portal is fully functional without AI.
-   (To keep AI, run `npm run worker` on any small always-on box pointed at the
-   same `DATABASE_URL`.)
-2. **4.5 MB request-body cap.** Shrink the upload limits:
-   `NEXT_PUBLIC_MAX_VIDEO_MB=4`, `NEXT_PUBLIC_MAX_FILE_MB=3`,
-   `NEXT_PUBLIC_MAX_FILES=3`, `SERVER_ACTION_BODY_LIMIT=4mb`.
-3. **Serverless DB connections.** Use a pooled `DATABASE_URL` (Neon's `-pooler`
-   host) or set `DB_POOL_MAX=1`.
+- **Lakebase Postgres** → `DATABASE_URL` / `DATABASE_URL_UNPOOLED`
+- **Object Storage** → the `attachments` bucket; `AWS_*` env vars
 
-Steps:
+Wiring is done by the Neon CLI, not by hand:
 
-```
-1. Postgres        → Neon / Vercel Postgres / Supabase. Copy the pooled URL.
-2. Object storage  → an S3 bucket or Cloudflare R2. Set S3_* and add CORS
-                     (allow GET + PUT from your Vercel domain).
-3. Import the repo in Vercel. Add all env vars from .env.example
-                     (real AUTH_SECRET, DATABASE_URL, S3_*, AI_DISABLED=1,
-                      the four upload overrides).
-4. Deploy. Then run migrations + seed against the hosted DB from your machine:
-     DATABASE_URL="<hosted>" npm run db:migrate
-     DATABASE_URL="<hosted>" npm run db:seed
-5. Sign in at /login  (admin@jazzworld.test / password123).
+```bash
+neon link --org-id <org> --project-id <project>   # writes .neon, pulls DATABASE_URL*
+neon deploy                                        # provisions the bucket, pulls AWS_*
+DATABASE_URL="$DATABASE_URL_UNPOOLED" npm run db:migrate   # direct conn for DDL
+DATABASE_URL="$DATABASE_URL_UNPOOLED" npm run db:seed
 ```
 
-For anything beyond a demo, deploy the Docker stack below — it's what the app is
-built for.
+Then on **Vercel** (import `hamzanaeem10/aiawards`), with two constraints:
+
+1. **No worker on serverless.** Keep `AI_DISABLED=1` — `enqueue()` is a no-op and
+   the portal is fully functional without AI. (To enable AI later, run
+   `npm run worker` on any always-on box with the same `DATABASE_URL`.)
+2. **4.5 MB request-body cap.** Set `NEXT_PUBLIC_MAX_VIDEO_MB=4`,
+   `NEXT_PUBLIC_MAX_FILE_MB=3`, `NEXT_PUBLIC_MAX_FILES=3`,
+   `SERVER_ACTION_BODY_LIMIT=4mb`.
+
+Vercel env vars: `AUTH_SECRET`, `DATABASE_URL` (Neon pooled), `AWS_ACCESS_KEY_ID`,
+`AWS_SECRET_ACCESS_KEY`, `AWS_ENDPOINT_URL_S3`, `AWS_REGION`, `S3_BUCKET=attachments`,
+`AI_DISABLED=1`, and the four upload overrides. Then sign in at `/login`
+(`admin@jazzworld.test` / `password123`).
+
+For production scale, use the Docker stack above — it's what the app is built for.
 
 ## Not built yet (next)
 

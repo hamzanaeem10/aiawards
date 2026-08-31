@@ -8,3 +8,9 @@ dist
 
 # source logo assets (the app uses public/jazzworld-logo.png)
 jazz-world-logo*.png
+.neon
+
+# tooling / local installs
+tsconfig.tsbuildinfo
+.agents/
+.claude/

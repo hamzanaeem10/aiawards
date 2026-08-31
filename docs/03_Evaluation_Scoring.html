@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JazzWorld AI Impact Awards — Evaluation &amp; Scoring</title>
+<style>
+  :root{
+    --maroon:#880839; --maroon-deep:#5A024E; --ink:#1F1D1D; --gray:#595959;
+    --bg:#F6F6F6; --bg-pink:#F8F3F3; --border:#DCDCDC; --white:#FFFFFF;
+    --good:#1E7A3C; --good-bg:#EAF6EE;
+    --amber:#B8860B; --amber-bg:#FBF3DF;
+    --red:#B23A3A; --red-bg:#FBEAEA;
+    --steel:#3D3D3D; --steel-bg:#EFEFEF;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0; font-family:'Segoe UI', Arial, Helvetica, sans-serif; background:var(--bg); color:var(--ink);}
+
+  header.top{background:linear-gradient(135deg,#5A024E 0%,#880839 100%); padding:22px 5vw; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;}
+  .brand{display:flex; align-items:center; gap:10px;}
+  .brand .mark{width:36px; height:36px; border-radius:50%; background:#fff; color:var(--maroon); font-weight:800; font-family:Georgia,serif; display:flex; align-items:center; justify-content:center; font-size:14px;}
+  .brand .word{color:#fff; letter-spacing:2px; font-size:13px; font-weight:700;}
+  header.top .tag{color:#F3D9E8; font-size:11px; letter-spacing:1.5px; font-weight:700;}
+
+  .hero{max-width:1100px; margin:0 auto; padding:30px 5vw 6px 5vw;}
+  .eyebrow{color:var(--maroon); font-size:12px; font-weight:700; letter-spacing:1.5px; margin-bottom:8px;}
+  h1{font-size:24px; margin:0 0 8px 0;}
+  .sub{color:var(--gray); font-size:14px; line-height:1.6; max-width:800px;}
+  .flagbadge{display:inline-block; background:var(--amber-bg); color:var(--amber); font-size:10.5px; font-weight:700; letter-spacing:0.3px; padding:3px 9px; border-radius:10px; margin-left:6px; vertical-align:middle;}
+
+  .layout{max-width:1100px; margin:20px auto 80px auto; padding:0 5vw; display:grid; grid-template-columns:1fr 300px; gap:24px; align-items:start;}
+  @media (max-width:900px){ .layout{grid-template-columns:1fr;} .scorebox{position:static !important;} }
+
+  .card{background:var(--white); border:1px solid var(--border); border-radius:10px; padding:24px 24px 20px 24px; margin-bottom:18px;}
+  .card h2{font-size:15.5px; margin:0 0 4px 0; display:flex; align-items:center; gap:8px;}
+  .card h2 .num{width:22px; height:22px; border-radius:50%; background:var(--maroon); color:#fff; font-size:11px; display:flex; align-items:center; justify-content:center; font-weight:700; flex-shrink:0;}
+  .card .hint{color:#9a9a9a; font-size:12px; margin:0 0 16px 30px; line-height:1.5;}
+
+  .field{margin-bottom:14px;}
+  label.flabel{display:block; font-size:12.5px; font-weight:700; margin-bottom:5px;}
+  input[type=text], input[type=date], select, textarea{
+    width:100%; padding:9px 11px; border:1px solid var(--border); border-radius:6px; font-size:13px; font-family:inherit; color:var(--ink);
+  }
+  textarea{resize:vertical; min-height:64px;}
+  .row2{display:grid; grid-template-columns:1fr 1fr; gap:12px;}
+  .row3{display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px;}
+  @media (max-width:640px){ .row2,.row3{grid-template-columns:1fr;} }
+
+  .fincallout{background:var(--bg-pink); border:1px solid #E8D3DC; border-radius:8px; padding:12px 14px; margin-bottom:14px;}
+  .fincallout label.flabel{color:var(--maroon);}
+
+  /* Criterion scoring block */
+  .crit{border:1px solid var(--border); border-radius:8px; padding:16px; margin-bottom:14px;}
+  .crit:last-child{margin-bottom:0;}
+  .crit-head{display:flex; justify-content:space-between; align-items:baseline; margin-bottom:4px;}
+  .crit-head b{font-size:14px;}
+  .crit-head .wt{color:var(--maroon); font-weight:800; font-size:13px;}
+  .crit-desc{color:#9a9a9a; font-size:11.5px; margin-bottom:10px; line-height:1.5;}
+  .scale{display:grid; grid-template-columns:repeat(5,1fr); gap:6px;}
+  @media (max-width:640px){ .scale{grid-template-columns:repeat(2,1fr);} }
+  .scale label{border:1px solid var(--border); border-radius:6px; padding:8px 6px; text-align:center; cursor:pointer; font-size:11px; line-height:1.35;}
+  .scale label b{display:block; font-size:15px;}
+  .scale label:has(input:checked){border-color:var(--maroon); background:var(--bg-pink); color:var(--maroon); font-weight:700;}
+  .scale input{display:none;}
+
+  /* Score sidebar */
+  .scorebox{position:sticky; top:20px; background:#fff; border:1px solid var(--border); border-radius:10px; padding:20px;}
+  .scorebox h3{font-size:12px; letter-spacing:1px; color:#9a9a9a; margin:0 0 12px 0; font-weight:700;}
+  .scorerow{display:flex; justify-content:space-between; font-size:12px; padding:5px 0; border-bottom:1px solid #F1F1F1; color:var(--gray);}
+  .scorerow b{color:var(--ink);}
+  .totalbig{text-align:center; margin:16px 0 10px 0;}
+  .totalbig .num{font-size:40px; font-weight:800; color:var(--maroon); line-height:1;}
+  .totalbig .of{font-size:12px; color:#9a9a9a;}
+  .tierbanner{border-radius:8px; padding:12px 14px; text-align:center; font-weight:800; font-size:13px; margin-top:8px;}
+  .tier-award{background:var(--good-bg); color:var(--good);}
+  .tier-finalist{background:#E9EEFB; color:#2A4B9B;}
+  .tier-hero{background:var(--amber-bg); color:var(--amber);}
+  .tier-develop{background:var(--steel-bg); color:var(--steel);}
+  .tier-noprogress{background:var(--red-bg); color:var(--red);}
+  .thresholds{margin-top:14px; font-size:10.5px; color:#aaa; line-height:1.7;}
+  .thresholds div span{float:right;}
+
+  .validation-item{display:flex; align-items:flex-start; gap:9px; padding:10px 0; border-bottom:1px solid #F1F1F1; font-size:12.5px;}
+  .validation-item:last-child{border-bottom:none;}
+  .validation-item input{margin-top:2px;}
+  .warnbar{display:none; background:var(--red-bg); color:var(--red); border:1px solid #EFC7C7; border-radius:7px; padding:10px 13px; font-size:12px; font-weight:700; margin-top:10px;}
+
+  .nextstep{background:var(--bg-pink); border:1px solid #E8D3DC; border-radius:8px; padding:14px; font-size:13px; color:var(--ink); line-height:1.6; margin-top:6px;}
+  .nextstep b{color:var(--maroon);}
+
+  button.submit{background:linear-gradient(135deg,#880839 0%,#5A024E 100%); color:#fff; border:none; padding:13px 26px; font-size:14px; font-weight:700; border-radius:7px; cursor:pointer; width:100%;}
+  #successPanel{display:none; max-width:1100px; margin:40px auto; padding:0 5vw;}
+  .success-card{background:#fff; border:1px solid var(--border); border-left:5px solid var(--good); border-radius:10px; padding:28px;}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="brand"><div class="mark">JW</div><div class="word">JAZZWORLD</div></div>
+  <div class="tag">AI IMPACT AWARDS — EVALUATION</div>
+</header>
+
+<div class="hero">
+  <div class="eyebrow">FOR PANEL REVIEWERS</div>
+  <h1>AI Initiative Evaluation &amp; Scoring</h1>
+  <div class="sub">Score every submission consistently against the JazzWorld Assessment Model. This tool weights each criterion per the framework, calculates the overall score automatically, and recommends where the initiative sits in the lifecycle — from recognition through to pilot and scale.</div>
+</div>
+
+<div class="layout">
+  <div>
+
+    <!-- Initiative snapshot -->
+    <div class="card">
+      <h2><span class="num">1</span> Initiative Snapshot</h2>
+      <p class="hint">Transcribed from the submission — for the panel's reference while scoring.</p>
+      <div class="row2">
+        <div class="field"><label class="flabel">Initiative Name</label><input type="text" placeholder="e.g. Smart Ticket Triage Assistant"></div>
+        <div class="field"><label class="flabel">Submitter / Team</label><input type="text"></div>
+      </div>
+      <div class="row3">
+        <div class="field"><label class="flabel">Function</label><input type="text"></div>
+        <div class="field"><label class="flabel">AI1440 Theme</label><input type="text" placeholder="Consumer / Corporate / Enterprise"></div>
+        <div class="field"><label class="flabel">Use Case Stage</label><input type="text" placeholder="Under Development / Pilot or Testing / Implemented"></div>
+      </div>
+      <div class="field"><label class="flabel">One-line Summary</label><textarea placeholder="Business challenge + AI solution, in one or two sentences."></textarea></div>
+      <div class="fincallout">
+        <label class="flabel">Reported Financial Impact</label>
+        <textarea placeholder="Transcribe what the submitter reported — type(s) of financial impact and quantified amount. If marked 'Not applicable', note the other measurable impact instead."></textarea>
+      </div>
+    </div>
+
+    <!-- Scoring -->
+    <div class="card">
+      <h2><span class="num">2</span> Assessment Model Scoring <span class="flagbadge">1–5 scale proposed — confirm with panel</span></h2>
+      <p class="hint">Weights are fixed per the JazzWorld framework. Score each criterion 1 (weak) to 5 (exceptional); the tool applies the weight automatically.</p>
+
+      <div class="crit" data-w="30" data-name="impact">
+        <div class="crit-head"><b>Impact</b><span class="wt">30%</span></div>
+        <div class="crit-desc">The real difference this makes for customers, employees, or the business — including quantified financial impact (revenue, cost savings/avoidance, efficiency) where applicable. See the Reported Financial Impact above.</div>
+        <div class="scale">
+          <label><input type="radio" name="impact" value="1"><b>1</b>Negligible</label>
+          <label><input type="radio" name="impact" value="2"><b>2</b>Limited</label>
+          <label><input type="radio" name="impact" value="3"><b>3</b>Moderate</label>
+          <label><input type="radio" name="impact" value="4"><b>4</b>Strong</label>
+          <label><input type="radio" name="impact" value="5"><b>5</b>Exceptional</label>
+        </div>
+      </div>
+
+      <div class="crit" data-w="20" data-name="evidence">
+        <div class="crit-head"><b>Evidence</b><span class="wt">20%</span></div>
+        <div class="crit-desc">Quality of proof behind the results. Under Development/Pilot ideas are scored on feasibility &amp; pilot quality instead, per the framework.</div>
+        <div class="scale">
+          <label><input type="radio" name="evidence" value="1"><b>1</b>Unsubstantiated</label>
+          <label><input type="radio" name="evidence" value="2"><b>2</b>Anecdotal</label>
+          <label><input type="radio" name="evidence" value="3"><b>3</b>Feasibility shown</label>
+          <label><input type="radio" name="evidence" value="4"><b>4</b>Pilot data</label>
+          <label><input type="radio" name="evidence" value="5"><b>5</b>Verified results</label>
+        </div>
+      </div>
+
+      <div class="crit" data-w="15" data-name="innovation">
+        <div class="crit-head"><b>AI Innovation</b><span class="wt">15%</span></div>
+        <div class="crit-desc">How novel the approach is versus the status quo at JazzWorld.</div>
+        <div class="scale">
+          <label><input type="radio" name="innovation" value="1"><b>1</b>Routine</label>
+          <label><input type="radio" name="innovation" value="2"><b>2</b>Incremental</label>
+          <label><input type="radio" name="innovation" value="3"><b>3</b>Notable</label>
+          <label><input type="radio" name="innovation" value="4"><b>4</b>Distinctive</label>
+          <label><input type="radio" name="innovation" value="5"><b>5</b>Breakthrough</label>
+        </div>
+      </div>
+
+      <div class="crit" data-w="15" data-name="scalability">
+        <div class="crit-head"><b>Scalability</b><span class="wt">15%</span></div>
+        <div class="crit-desc">Potential to grow beyond the originating team.</div>
+        <div class="scale">
+          <label><input type="radio" name="scalability" value="1"><b>1</b>Single use</label>
+          <label><input type="radio" name="scalability" value="2"><b>2</b>Team-only</label>
+          <label><input type="radio" name="scalability" value="3"><b>3</b>Function-wide</label>
+          <label><input type="radio" name="scalability" value="4"><b>4</b>Company-wide</label>
+          <label><input type="radio" name="scalability" value="5"><b>5</b>Multi-market</label>
+        </div>
+      </div>
+
+      <div class="crit" data-w="10" data-name="responsible">
+        <div class="crit-head"><b>Responsible AI</b><span class="wt">10%</span></div>
+        <div class="crit-desc">Data privacy, fairness, explainability and human oversight.</div>
+        <div class="scale">
+          <label><input type="radio" name="responsible" value="1"><b>1</b>Not addressed</label>
+          <label><input type="radio" name="responsible" value="2"><b>2</b>Partial</label>
+          <label><input type="radio" name="responsible" value="3"><b>3</b>Adequate</label>
+          <label><input type="radio" name="responsible" value="4"><b>4</b>Strong</label>
+          <label><input type="radio" name="responsible" value="5"><b>5</b>Exemplary</label>
+        </div>
+      </div>
+
+      <div class="crit" data-w="10" data-name="adoption">
+        <div class="crit-head"><b>Adoption Readiness</b><span class="wt">10%</span></div>
+        <div class="crit-desc">How ready the solution is to be used day-to-day.</div>
+        <div class="scale">
+          <label><input type="radio" name="adoption" value="1"><b>1</b>Concept only</label>
+          <label><input type="radio" name="adoption" value="2"><b>2</b>Early adoption</label>
+          <label><input type="radio" name="adoption" value="3"><b>3</b>Building traction</label>
+          <label><input type="radio" name="adoption" value="4"><b>4</b>Broadly adopted</label>
+          <label><input type="radio" name="adoption" value="5"><b>5</b>Fully embedded</label>
+        </div>
+      </div>
+    </div>
+
+    <!-- Governance -->
+    <div class="card">
+      <h2><span class="num">3</span> Governance &amp; Validation</h2>
+      <p class="hint">Per the framework's governance controls — confirm before a score progresses past Quarterly Finalist.</p>
+      <label class="validation-item"><input type="checkbox" id="valConflict"> Conflicts of interest declared; sponsors did not take part in judging this submission.</label>
+      <label class="validation-item"><input type="checkbox" id="valBizFin"> Business &amp; Finance have validated the reported impact figures, particularly quantified financial impact.</label>
+      <label class="validation-item"><input type="checkbox" id="valTech"> Tech and control teams have validated safe, responsible use.</label>
+      <label class="validation-item"><input type="checkbox" id="valCpo"> CPO &amp; Chief AI Officer reviewed <span style="color:#aaa; font-weight:400;">(required at JW AI Impact Award tier; CEO approves final award)</span></label>
+      <div class="warnbar" id="warnBar">⚠ This score qualifies for progression, but required validations are not yet complete.</div>
+    </div>
+
+    <!-- Comments -->
+    <div class="card">
+      <h2><span class="num">4</span> Evaluator Comments &amp; Recommendation</h2>
+      <div class="field"><label class="flabel">Rationale for Scores</label><textarea placeholder="Brief justification, especially for any score of 1–2 or 5."></textarea></div>
+      <div class="field"><label class="flabel">Additional Validation Required?</label>
+        <select>
+          <option>None</option>
+          <option>Business case clarification</option>
+          <option>Technical / safety review</option>
+          <option>Legal &amp; Privacy review</option>
+          <option>Further data / results verification</option>
+        </select>
+      </div>
+      <div class="field">
+        <label class="flabel">Overall Recommendation</label>
+        <select id="recDropdown">
+          <option value="auto">Use auto-suggested outcome (recommended)</option>
+          <option value="award">Recommend for JW AI Impact Award</option>
+          <option value="finalist">Shortlist as Quarterly Finalist</option>
+          <option value="hero">Recognize as Monthly AI Hero</option>
+          <option value="develop">Return for Development (Bi-Monthly Review)</option>
+          <option value="noprogress">Do Not Progress at This Time</option>
+        </select>
+      </div>
+      <div class="row2">
+        <div class="field"><label class="flabel">Evaluator Name</label><input type="text"></div>
+        <div class="field"><label class="flabel">Date</label><input type="date"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <button type="button" class="submit" onclick="recordAssessment()">Record Assessment</button>
+    </div>
+
+  </div>
+
+  <!-- Sidebar live score -->
+  <div class="scorebox">
+    <h3>LIVE SCORE</h3>
+    <div class="scorerow"><span>Impact (30%)</span><b id="c-impact">—</b></div>
+    <div class="scorerow"><span>Evidence (20%)</span><b id="c-evidence">—</b></div>
+    <div class="scorerow"><span>AI Innovation (15%)</span><b id="c-innovation">—</b></div>
+    <div class="scorerow"><span>Scalability (15%)</span><b id="c-scalability">—</b></div>
+    <div class="scorerow"><span>Responsible AI (10%)</span><b id="c-responsible">—</b></div>
+    <div class="scorerow"><span>Adoption Readiness (10%)</span><b id="c-adoption">—</b></div>
+
+    <div class="totalbig">
+      <div class="num" id="totalScore">0</div>
+      <div class="of">out of 100 max</div>
+    </div>
+
+    <div class="tierbanner tier-develop" id="tierBanner">Awaiting scores</div>
+
+    <div class="nextstep" id="nextStep">Score every criterion to see the recommended next step.</div>
+
+    <div class="thresholds">
+      <div><b>Suggested thresholds</b> <span class="flagbadge" style="margin-left:0;">gap-fill</span></div>
+      <div>85–100 · JW AI Impact Award <span></span></div>
+      <div>70–84 · Quarterly Finalist <span></span></div>
+      <div>55–69 · Monthly AI Hero <span></span></div>
+      <div>40–54 · Needs Development <span></span></div>
+      <div>0–39 · Not Progressed <span></span></div>
+    </div>
+  </div>
+</div>
+
+<div id="successPanel">
+  <div class="success-card">
+    <h2 style="color:var(--good); margin:0 0 8px 0;">Assessment recorded</h2>
+    <p style="color:var(--gray); font-size:14px; line-height:1.6;">The score, tier and recommendation have been logged for this initiative. It now moves to the next lifecycle step shown above.</p>
+  </div>
+</div>
+
+<script>
+const criteria = ['impact','evidence','innovation','scalability','responsible','adoption'];
+const weights = {impact:30, evidence:20, innovation:15, scalability:15, responsible:10, adoption:10};
+
+function recalc(){
+  let total = 0;
+  let allScored = true;
+  criteria.forEach(c => {
+    const checked = document.querySelector('input[name="'+c+'"]:checked');
+    const el = document.getElementById('c-'+c);
+    if(checked){
+      const raw = parseInt(checked.value,10);
+      const contrib = (raw/5) * weights[c];
+      total += contrib;
+      el.textContent = contrib.toFixed(1) + ' / ' + weights[c];
+    } else {
+      allScored = false;
+      el.textContent = '—';
+    }
+  });
+  document.getElementById('totalScore').textContent = total.toFixed(1);
+
+  const banner = document.getElementById('tierBanner');
+  const nextStep = document.getElementById('nextStep');
+  const warnBar = document.getElementById('warnBar');
+  let tier, tierClass, nextText, needsValidation = false;
+
+  if(!allScored){
+    banner.className = 'tierbanner tier-develop';
+    banner.textContent = 'Awaiting scores';
+    nextStep.innerHTML = 'Score every criterion to see the recommended next step.';
+    warnBar.style.display = 'none';
+    return;
+  }
+
+  if(total >= 85){
+    tier = 'JW AI Impact Award tier'; tierClass = 'tier-award';
+    nextText = '<b>Recommended next step:</b> Recommend for the JW AI Impact Award. Route to CPO &amp; Chief AI Officer for review and CEO approval, then move into Pilot &amp; Scale support.';
+    needsValidation = true;
+  } else if(total >= 70){
+    tier = 'Quarterly Finalist'; tierClass = 'tier-finalist';
+    nextText = '<b>Recommended next step:</b> Shortlist as a Quarterly Finalist. Confirm Business &amp; Finance and Tech/Control validation before it competes for the JW AI Impact Award.';
+    needsValidation = true;
+  } else if(total >= 55){
+    tier = 'Monthly AI Hero'; tierClass = 'tier-hero';
+    nextText = '<b>Recommended next step:</b> Recognize as a Monthly AI Hero. Continue through the Bi-Monthly Review for development support and to build toward quarterly selection.';
+  } else if(total >= 40){
+    tier = 'Needs Development'; tierClass = 'tier-develop';
+    nextText = '<b>Recommended next step:</b> Not shortlisted this cycle. Return with feedback via the Bi-Monthly Review — focus on strengthening Impact and Evidence before resubmission.';
+  } else {
+    tier = 'Not Progressed at This Time'; tierClass = 'tier-noprogress';
+    nextText = '<b>Recommended next step:</b> Do not progress at this time. Encourage the submitter to revisit the problem definition and feasibility, and resubmit in a future cycle.';
+  }
+
+  banner.className = 'tierbanner ' + tierClass;
+  banner.textContent = tier;
+
+  const recDropdown = document.getElementById('recDropdown').value;
+  if(recDropdown !== 'auto'){
+    const overrideMap = {
+      award: ['JW AI Impact Award tier (evaluator override)', 'tier-award', 'Evaluator has manually recommended the JW AI Impact Award, overriding the auto-suggested outcome.'],
+      finalist: ['Quarterly Finalist (evaluator override)', 'tier-finalist', 'Evaluator has manually shortlisted this as a Quarterly Finalist, overriding the auto-suggested outcome.'],
+      hero: ['Monthly AI Hero (evaluator override)', 'tier-hero', 'Evaluator has manually recognized this as a Monthly AI Hero, overriding the auto-suggested outcome.'],
+      develop: ['Needs Development (evaluator override)', 'tier-develop', 'Evaluator has manually routed this to Development, overriding the auto-suggested outcome.'],
+      noprogress: ['Not Progressed (evaluator override)', 'tier-noprogress', 'Evaluator has manually marked this as Not Progressed, overriding the auto-suggested outcome.']
+    };
+    const o = overrideMap[recDropdown];
+    banner.className = 'tierbanner ' + o[1];
+    banner.textContent = o[0];
+    nextText = '<b>Next step:</b> ' + o[2];
+    needsValidation = (recDropdown === 'award' || recDropdown === 'finalist');
+  }
+
+  nextStep.innerHTML = nextText;
+
+  if(needsValidation){
+    const bizfin = document.getElementById('valBizFin').checked;
+    const tech = document.getElementById('valTech').checked;
+    const cpo = document.getElementById('valCpo').checked;
+    const requireCpo = total >= 85 || recDropdown === 'award';
+    const complete = bizfin && tech && (!requireCpo || cpo);
+    warnBar.style.display = complete ? 'none' : 'block';
+  } else {
+    warnBar.style.display = 'none';
+  }
+}
+
+document.querySelectorAll('input[type=radio]').forEach(r => r.addEventListener('change', recalc));
+document.querySelectorAll('#valBizFin, #valTech, #valCpo').forEach(el => el.addEventListener('change', recalc));
+document.getElementById('recDropdown').addEventListener('change', recalc);
+recalc();
+
+function recordAssessment(){
+  document.querySelector('.layout').style.display = 'none';
+  document.getElementById('successPanel').style.display = 'block';
+  window.scrollTo({top:0, behavior:'smooth'});
+}
+</script>
+
+</body>
+</html>

@@ -1,0 +1,72 @@
+import { cookies } from "next/headers";
+import { SignJWT, jwtVerify } from "jose";
+import bcrypt from "bcryptjs";
+import { eq } from "drizzle-orm";
+import { db, users } from "./db";
+
+const secret = new TextEncoder().encode(
+  process.env.AUTH_SECRET || "dev-insecure-secret-change-me",
+);
+const COOKIE = "aia_session";
+
+export type Session = { userId: string; role: string; name: string; email: string };
+
+export async function hashPassword(pw: string) {
+  return bcrypt.hash(pw, 10);
+}
+
+export async function verifyLogin(email: string, password: string) {
+  const [u] = await db.select().from(users).where(eq(users.email, email.toLowerCase()));
+  if (!u) return null;
+  if (!(await bcrypt.compare(password, u.passwordHash))) return null;
+  return u;
+}
+
+export async function createSession(u: {
+  id: string;
+  role: string;
+  name: string;
+  email: string;
+}) {
+  const token = await new SignJWT({ role: u.role, name: u.name, email: u.email })
+    .setProtectedHeader({ alg: "HS256" })
+    .setSubject(u.id)
+    .setExpirationTime("7d")
+    .setIssuedAt()
+    .sign(secret);
+  (await cookies()).set(COOKIE, token, {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    maxAge: 60 * 60 * 24 * 7,
+  });
+}
+
+export async function destroySession() {
+  (await cookies()).delete(COOKIE);
+}
+
+export async function getSession(): Promise<Session | null> {
+  const token = (await cookies()).get(COOKIE)?.value;
+  if (!token) return null;
+  try {
+    const { payload } = await jwtVerify(token, secret);
+    return {
+      userId: String(payload.sub),
+      role: String(payload.role),
+      name: String(payload.name),
+      email: String(payload.email),
+    };
+  } catch {
+    return null;
+  }
+}
+
+export async function requireRole(...roles: string[]): Promise<Session> {
+  const s = await getSession();
+  if (!s || (roles.length && !roles.includes(s.role))) {
+    throw new Error("UNAUTHORIZED");
+  }
+  return s;
+}

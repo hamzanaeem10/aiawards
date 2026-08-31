@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JazzWorld AI Impact Awards — Submission Form</title>
+<style>
+  :root{
+    --maroon:#880839; --maroon-deep:#5A024E; --ink:#1F1D1D; --gray:#595959;
+    --bg:#F6F6F6; --bg-pink:#F8F3F3; --border:#DCDCDC; --white:#FFFFFF;
+    --good:#1E7A3C; --warn:#B8860B;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0; font-family:'Segoe UI', Arial, Helvetica, sans-serif; background:var(--bg); color:var(--ink);}
+  a{color:inherit;}
+
+  header.top{background:linear-gradient(135deg,#5A024E 0%,#880839 100%); padding:18px 5vw; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;}
+  .brand{display:flex; align-items:center; gap:10px;}
+  .brand .mark{width:34px; height:34px; border-radius:50%; background:#fff; color:var(--maroon); font-weight:800; font-family:Georgia,serif; display:flex; align-items:center; justify-content:center; font-size:13px;}
+  .brand .word{color:#fff; letter-spacing:2px; font-size:12.5px; font-weight:700;}
+  header.top .tag{color:#F3D9E8; font-size:10.5px; letter-spacing:1.5px; font-weight:700;}
+
+  .hero{max-width:900px; margin:0 auto; padding:24px 5vw 4px 5vw;}
+  .eyebrow{color:var(--maroon); font-size:11.5px; font-weight:700; letter-spacing:1.5px; margin-bottom:6px;}
+  h1{font-size:23px; margin:0 0 8px 0;}
+  .sub{color:var(--gray); font-size:13.5px; line-height:1.55; max-width:720px;}
+
+  .layout{max-width:900px; margin:16px auto 60px auto; padding:0 5vw; display:grid; grid-template-columns:190px 1fr; gap:20px;}
+  @media (max-width:760px){ .layout{grid-template-columns:1fr;} nav.toc{display:none;} }
+
+  nav.toc{position:sticky; top:16px; align-self:start; background:var(--white); border:1px solid var(--border); border-radius:8px; padding:12px;}
+  nav.toc div.label{font-size:10px; letter-spacing:1px; color:#9a9a9a; font-weight:700; margin-bottom:6px;}
+  nav.toc a{display:block; font-size:12px; color:var(--gray); text-decoration:none; padding:5px 7px; border-radius:5px; margin-bottom:1px;}
+  nav.toc a:hover{background:var(--bg-pink); color:var(--maroon);}
+
+  form{display:flex; flex-direction:column; gap:14px;}
+  .card{background:var(--white); border:1px solid var(--border); border-radius:10px; padding:18px 20px 16px 20px; scroll-margin-top:16px;}
+  .card h2{font-size:15px; margin:0 0 3px 0; display:flex; align-items:center; gap:8px;}
+  .card h2 .num{width:20px; height:20px; border-radius:50%; background:var(--maroon); color:#fff; font-size:10.5px; display:flex; align-items:center; justify-content:center; font-weight:700; flex-shrink:0;}
+  .card .hint{color:#9a9a9a; font-size:12px; margin:0 0 12px 28px; line-height:1.4;}
+
+  .field{margin-bottom:12px;}
+  .field:last-child{margin-bottom:0;}
+  label.flabel{display:block; font-size:12.5px; font-weight:700; color:var(--ink); margin-bottom:5px;}
+  label.flabel .req{color:var(--maroon);}
+  label.flabel .opt{color:#aaa; font-weight:400; font-size:11px; text-transform:uppercase; letter-spacing:0.5px;}
+  .field .desc{color:#9a9a9a; font-size:11px; margin-bottom:5px; line-height:1.35;}
+
+  input[type=text], input[type=email], input[type=url], input[type=number], textarea, select{
+    width:100%; padding:9px 11px; border:1px solid var(--border); border-radius:6px; font-size:13px;
+    font-family:inherit; color:var(--ink); background:#fff;
+  }
+  input:focus, textarea:focus, select:focus{outline:2px solid var(--maroon); outline-offset:1px; border-color:var(--maroon);}
+  textarea{resize:vertical; min-height:56px;}
+
+  .row2{display:grid; grid-template-columns:1fr 1fr; gap:12px;}
+  .row3{display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px;}
+  @media (max-width:600px){ .row2,.row3{grid-template-columns:1fr;} }
+
+  .choice-grid{display:grid; grid-template-columns:repeat(2,1fr); gap:6px;}
+  @media (max-width:600px){ .choice-grid{grid-template-columns:1fr;} }
+  .choice{border:1px solid var(--border); border-radius:7px; padding:8px 10px; display:flex; align-items:flex-start; gap:7px; cursor:pointer; font-size:12.5px;}
+  .choice:has(input:checked){border-color:var(--maroon); background:var(--bg-pink);}
+  .choice input{margin-top:2px;}
+  .choice .ctext b{display:block; font-size:12.5px; font-weight:600;}
+  .choice .ctext span{display:block; font-size:10.5px; color:#9a9a9a; margin-top:1px;}
+
+  .theme-pills{display:flex; flex-wrap:wrap; gap:6px;}
+  .pill{border:1px solid var(--border); background:#fff; border-radius:16px; padding:6px 12px; font-size:12px; cursor:pointer; font-weight:600; color:var(--gray);}
+  .pill input{display:none;}
+  .pill:has(input:checked){background:var(--maroon); color:#fff; border-color:var(--maroon);}
+
+  .team-row, .link-row{display:grid; grid-template-columns:1fr 1fr auto; gap:8px; margin-bottom:6px; align-items:center;}
+  .link-row{grid-template-columns:1fr auto;}
+  @media (max-width:600px){ .team-row{grid-template-columns:1fr;} }
+  .row-remove{background:none; border:1px solid var(--border); color:#aaa; border-radius:6px; width:30px; height:30px; cursor:pointer; font-size:13px;}
+  .add-btn{background:var(--bg-pink); border:1px dashed #D8A8BC; color:var(--maroon); border-radius:6px; padding:7px 12px; font-size:12px; font-weight:700; cursor:pointer; margin-top:2px;}
+
+  #teamSection{display:none;}
+
+  .decl{display:flex; align-items:flex-start; gap:9px; font-size:12.5px; color:var(--gray); background:var(--bg-pink); padding:12px; border-radius:8px;}
+  .decl input{margin-top:3px;}
+
+  .submit-bar{display:flex; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap;}
+  button.submit{background:linear-gradient(135deg,#880839 0%,#5A024E 100%); color:#fff; border:none; padding:12px 26px; font-size:13.5px; font-weight:700; border-radius:7px; cursor:pointer;}
+  button.submit:hover{opacity:0.92;}
+  .submit-note{font-size:11px; color:#9a9a9a;}
+
+  #successPanel{display:none; max-width:900px; margin:40px auto; padding:0 5vw;}
+  .success-card{background:#fff; border:1px solid var(--border); border-left:5px solid var(--good); border-radius:10px; padding:26px;}
+  .success-card h2{margin:0 0 8px 0; color:var(--good);}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="brand"><div class="mark">JW</div><div class="word">JAZZWORLD</div></div>
+  <div class="tag">AI IMPACT AWARDS — SUBMISSION</div>
+</header>
+
+<div class="hero">
+  <div class="eyebrow">SHARE YOUR IDEA OR USE CASE</div>
+  <h1>AI Initiative Submission Form</h1>
+  <div class="sub">Tell us about your AI-led initiative — the more concrete, the less back-and-forth later. Ideas at any stage are welcome, from early concept to something already scaled.</div>
+</div>
+
+<div class="layout">
+  <nav class="toc">
+    <div class="label">SECTIONS</div>
+    <a href="#s1">1. Initiative Overview</a>
+    <a href="#s2">2. Submitter &amp; Team</a>
+    <a href="#s3">3. Challenge, Solution &amp; Innovation</a>
+    <a href="#s4">4. Impact &amp; Scalability</a>
+    <a href="#s5">5. Responsible AI &amp; Adoption</a>
+    <a href="#s6">6. Supporting Evidence</a>
+    <a href="#s7">7. Declaration</a>
+  </nav>
+
+  <form id="submissionForm">
+
+    <!-- 1. Initiative Overview -->
+    <div class="card" id="s1">
+      <h2><span class="num">1</span> Initiative Overview</h2>
+
+      <div class="field">
+        <label class="flabel">Initiative / Project Name <span class="req">*</span></label>
+        <input type="text" required placeholder="e.g. Smart Ticket Triage Assistant">
+      </div>
+
+      <div class="field">
+        <label class="flabel">Submission Type <span class="req">*</span></label>
+        <div class="choice-grid">
+          <label class="choice"><input type="radio" name="subtype" value="individual" checked onclick="document.getElementById('teamSection').style.display='none'"><span class="ctext"><b>Individual</b></span></label>
+          <label class="choice"><input type="radio" name="subtype" value="team" onclick="document.getElementById('teamSection').style.display='block'"><span class="ctext"><b>Team</b></span></label>
+        </div>
+      </div>
+
+      <div class="field">
+        <label class="flabel">AI1440 Theme <span class="req">*</span></label>
+        <div class="desc">Every initiative maps to one of the three AI1440 categories.</div>
+        <div class="theme-pills">
+          <label class="pill"><input type="radio" name="theme" value="consumer" required> Consumer</label>
+          <label class="pill"><input type="radio" name="theme" value="corporate" required> Corporate</label>
+          <label class="pill"><input type="radio" name="theme" value="enterprise" required> Enterprise</label>
+        </div>
+      </div>
+
+      <div class="row2">
+        <div class="field">
+          <label class="flabel">Business / Function <span class="req">*</span></label>
+          <select required>
+            <option value="">Select function…</option>
+            <option>Commercial</option>
+            <option>Technology</option>
+            <option>People &amp; Organization</option>
+            <option>Finance</option>
+            <option>Customer Care</option>
+            <option>Risk, Compliance &amp; Privacy</option>
+            <option>Corporate &amp; Regulatory Affairs</option>
+            <option>Other</option>
+          </select>
+        </div>
+        <div class="field">
+          <label class="flabel">Use Case Stage <span class="req">*</span></label>
+          <div class="desc">The maturity of this initiative today.</div>
+          <select required>
+            <option value="">Select stage…</option>
+            <option>Under Development</option>
+            <option>Pilot or Testing</option>
+            <option>Implemented</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2. Submitter & Team -->
+    <div class="card" id="s2">
+      <h2><span class="num">2</span> Submitter &amp; Team Details</h2>
+
+      <div class="row2">
+        <div class="field"><label class="flabel">Submitter Name <span class="req">*</span></label><input type="text" required></div>
+        <div class="field"><label class="flabel">Submitter Email <span class="req">*</span></label><input type="email" required></div>
+      </div>
+
+      <div class="field">
+        <label class="flabel">Nomination Type <span class="opt">optional</span></label>
+        <div class="choice-grid">
+          <label class="choice"><input type="radio" name="nomtype" value="self" checked><span class="ctext"><b>Self-submission</b></span></label>
+          <label class="choice"><input type="radio" name="nomtype" value="peer"><span class="ctext"><b>Peer nomination</b></span></label>
+          <label class="choice"><input type="radio" name="nomtype" value="manager"><span class="ctext"><b>Manager nomination</b></span></label>
+        </div>
+      </div>
+
+      <div id="teamSection">
+        <label class="flabel">Team Members</label>
+        <div id="teamRows"></div>
+        <button type="button" class="add-btn" onclick="addTeamRow()">+ Add team member</button>
+      </div>
+
+      <div class="row2" style="margin-top:12px;">
+        <div class="field"><label class="flabel">Project Owner / Sponsor Name <span class="req">*</span></label><input type="text" required></div>
+        <div class="field"><label class="flabel">Sponsor Role / Title</label><input type="text"></div>
+      </div>
+    </div>
+
+    <!-- 3. Challenge, Solution & Innovation -->
+    <div class="card" id="s3">
+      <h2><span class="num">3</span> Challenge, Solution &amp; Innovation</h2>
+
+      <div class="field">
+        <label class="flabel">Business Challenge or Opportunity <span class="req">*</span></label>
+        <textarea required placeholder="What problem were you solving, and for whom?"></textarea>
+      </div>
+      <div class="field">
+        <label class="flabel">Description of the AI Solution <span class="req">*</span></label>
+        <textarea required placeholder="What did you build or implement, in plain language?"></textarea>
+      </div>
+      <div class="field">
+        <label class="flabel">AI Technology / Approach Used <span class="req">*</span></label>
+        <div class="choice-grid">
+          <label class="choice"><input type="checkbox"><span class="ctext"><b>Generative AI / LLM</b></span></label>
+          <label class="choice"><input type="checkbox"><span class="ctext"><b>Machine Learning / Predictive</b></span></label>
+          <label class="choice"><input type="checkbox"><span class="ctext"><b>Computer Vision</b></span></label>
+          <label class="choice"><input type="checkbox"><span class="ctext"><b>NLP / Text Analytics</b></span></label>
+          <label class="choice"><input type="checkbox"><span class="ctext"><b>RPA + AI</b></span></label>
+          <label class="choice"><input type="checkbox"><span class="ctext"><b>Chatbot / Virtual Assistant</b></span></label>
+        </div>
+        <input type="text" style="margin-top:6px;" placeholder="Other approach (optional)">
+      </div>
+      <div class="row2">
+        <div class="field">
+          <label class="flabel">Target Users / Customers <span class="req">*</span></label>
+          <input type="text" required placeholder="Who uses or benefits from this?">
+        </div>
+        <div class="field">
+          <label class="flabel">What's New or Different <span class="req">*</span></label>
+          <input type="text" required placeholder="vs. how it was done before">
+        </div>
+      </div>
+    </div>
+
+    <!-- 4. Impact & Scalability -->
+    <div class="card" id="s4">
+      <h2><span class="num">4</span> Impact &amp; Scalability</h2>
+
+      <div class="field">
+        <label class="flabel">Impact <span class="req">*</span></label>
+        <textarea required placeholder="Who benefits and how — customers, employees, and/or the business?"></textarea>
+      </div>
+
+      <div class="field">
+        <label class="flabel">Financial Impact <span class="req">*</span></label>
+        <div class="desc">Select what applies and quantify below. If none apply, check "Not applicable" and capture other measurable impact in Key Metrics.</div>
+        <div class="choice-grid">
+          <label class="choice"><input type="checkbox" name="finimpact" value="revenue"><span class="ctext"><b>Revenue generated / enabled</b></span></label>
+          <label class="choice"><input type="checkbox" name="finimpact" value="costsavings"><span class="ctext"><b>Cost savings</b></span></label>
+          <label class="choice"><input type="checkbox" name="finimpact" value="costavoidance"><span class="ctext"><b>Cost avoidance</b></span></label>
+          <label class="choice"><input type="checkbox" name="finimpact" value="efficiency"><span class="ctext"><b>Productivity / efficiency value</b></span></label>
+          <label class="choice"><input type="checkbox" name="finimpact" value="na"><span class="ctext"><b>Not applicable to this initiative</b></span></label>
+        </div>
+        <input type="text" style="margin-top:6px;" placeholder="Quantify: amount, currency/unit and basis (e.g. PKR 2.4M/yr in cost savings from reduced handling time)">
+      </div>
+
+      <div class="row2">
+        <div class="field">
+          <label class="flabel">Evidence Stage <span class="req">*</span></label>
+          <select required>
+            <option value="">Select…</option>
+            <option>Concept only — no data yet</option>
+            <option>Feasibility validated</option>
+            <option>Pilot data available</option>
+            <option>Full results measured</option>
+          </select>
+        </div>
+        <div class="field">
+          <label class="flabel">Scalability Potential <span class="req">*</span></label>
+          <select required>
+            <option value="">Select…</option>
+            <option>Team-only</option>
+            <option>Function-wide</option>
+            <option>Company-wide (JazzWorld)</option>
+            <option>Multi-market potential (VEON OpCos)</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="field">
+        <label class="flabel">Key Metrics <span class="opt">optional</span></label>
+        <textarea placeholder="Other measurable impact — e.g. Avg. handling time: 8 min → 3 min; customer satisfaction, employee time saved"></textarea>
+      </div>
+    </div>
+
+    <!-- 5. Responsible AI & Adoption -->
+    <div class="card" id="s5">
+      <h2><span class="num">5</span> Responsible AI &amp; Adoption</h2>
+
+      <div class="field">
+        <div class="choice-grid">
+          <label class="choice"><input type="checkbox"><span class="ctext"><b>Data privacy &amp; consent reviewed</b></span></label>
+          <label class="choice"><input type="checkbox"><span class="ctext"><b>Bias / fairness considered</b></span></label>
+          <label class="choice"><input type="checkbox"><span class="ctext"><b>Explainable to those affected</b></span></label>
+          <label class="choice"><input type="checkbox"><span class="ctext"><b>Human oversight in place</b></span></label>
+        </div>
+      </div>
+      <div class="field">
+        <label class="flabel">Details <span class="req">*</span></label>
+        <textarea required placeholder="How was data handled, and what privacy or ethics considerations did you address?"></textarea>
+      </div>
+      <div class="field">
+        <label class="flabel">Adoption Readiness <span class="req">*</span></label>
+        <select required>
+          <option value="">Select…</option>
+          <option>Not yet adopted — concept stage</option>
+          <option>Early adoption — limited users</option>
+          <option>Broad adoption within team / function</option>
+          <option>Fully embedded in business-as-usual</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- 6. Supporting Evidence -->
+    <div class="card" id="s6">
+      <h2><span class="num">6</span> Supporting Evidence</h2>
+      <div class="field">
+        <label class="flabel">Links <span class="opt">dashboards, demos, repos — optional</span></label>
+        <div id="linkRows">
+          <div class="link-row">
+            <input type="url" placeholder="https://…">
+            <button type="button" class="row-remove" onclick="this.closest('.link-row').remove()">✕</button>
+          </div>
+        </div>
+        <button type="button" class="add-btn" onclick="addLinkRow()">+ Add link</button>
+      </div>
+      <div class="row2">
+        <div class="field">
+          <label class="flabel">Attachments <span class="opt">optional</span></label>
+          <input type="file" multiple>
+        </div>
+        <div class="field">
+          <label class="flabel">Additional Information <span class="opt">optional</span></label>
+          <input type="text" placeholder="Anything else the panel should know">
+        </div>
+      </div>
+    </div>
+
+    <!-- 7. Declaration -->
+    <div class="card" id="s7">
+      <h2><span class="num">7</span> Declaration</h2>
+      <label class="decl">
+        <input type="checkbox" required>
+        <span>I confirm the information provided is accurate, that I have the necessary approvals to share it, and that applicable data privacy and Responsible AI requirements have been followed.</span>
+      </label>
+    </div>
+
+    <div class="card submit-bar">
+      <div class="submit-note">Submissions are reviewed on a rolling basis.</div>
+      <button type="submit" class="submit">Submit Initiative &rarr;</button>
+    </div>
+
+  </form>
+</div>
+
+<div id="successPanel">
+  <div class="success-card">
+    <h2>Submission received</h2>
+    <p style="color:var(--gray); font-size:14px; line-height:1.6;">Thank you — your AI initiative has been logged for review. You'll be notified if selected as a Monthly AI Hero, a Quarterly Finalist, or for follow-up on any section.</p>
+  </div>
+</div>
+
+<script>
+function addTeamRow(){
+  const wrap = document.getElementById('teamRows');
+  const row = document.createElement('div');
+  row.className = 'team-row';
+  row.innerHTML = '<input type="text" placeholder="Team member name"><input type="text" placeholder="Role / function"><button type="button" class="row-remove" onclick="this.closest(\'.team-row\').remove()">✕</button>';
+  wrap.appendChild(row);
+}
+function addLinkRow(){
+  const wrap = document.getElementById('linkRows');
+  const row = document.createElement('div');
+  row.className = 'link-row';
+  row.innerHTML = '<input type="url" placeholder="https://…"><button type="button" class="row-remove" onclick="this.closest(\'.link-row\').remove()">✕</button>';
+  wrap.appendChild(row);
+}
+addTeamRow();
+
+document.getElementById('submissionForm').addEventListener('submit', function(e){
+  e.preventDefault();
+  document.querySelector('.layout').style.display = 'none';
+  document.getElementById('successPanel').style.display = 'block';
+  window.scrollTo({top:0, behavior:'smooth'});
+});
+</script>
+
+</body>
+</html>

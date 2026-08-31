@@ -1,0 +1,10 @@
+node_modules
+.next
+.env
+.env.local
+*.log
+dist
+.DS_Store
+
+# source logo assets (the app uses public/jazzworld-logo.png)
+jazz-world-logo*.png

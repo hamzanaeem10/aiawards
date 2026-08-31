@@ -1,0 +1,283 @@
+import { notFound, redirect } from "next/navigation";
+import { eq, and, desc } from "drizzle-orm";
+import {
+  db, submissions, attachments, evaluations, governanceChecks, aiInsights,
+} from "@/lib/db";
+import { getSession } from "@/lib/auth";
+import { signedDownloadUrl } from "@/lib/storage";
+import Scorecard from "./Scorecard";
+import type { IntakeSummary } from "@/lib/ai/intake";
+
+function Read({ label, value }: { label: string; value?: unknown }) {
+  if (
+    value == null ||
+    value === "" ||
+    (Array.isArray(value) && !value.length)
+  )
+    return null;
+  return (
+    <div className="readfield">
+      <div className="k">{label}</div>
+      <div className="v">{Array.isArray(value) ? value.join(", ") : String(value)}</div>
+    </div>
+  );
+}
+
+export default async function EvaluatePage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ saved?: string }>;
+}) {
+  const { id } = await params;
+  const { saved } = await searchParams;
+  const s = await getSession();
+  if (!s || (s.role !== "reviewer" && s.role !== "chair")) redirect("/login");
+
+  const [sub] = await db.select().from(submissions).where(eq(submissions.id, id));
+  if (!sub) notFound();
+
+  const files = await db
+    .select()
+    .from(attachments)
+    .where(eq(attachments.submissionId, id));
+  const withUrls = await Promise.all(
+    files
+      .filter((f) => f.kind === "file" || f.kind === "video")
+      .map(async (f) => ({
+        ...f,
+        href: await signedDownloadUrl(f.storageKey, f.filename),
+      })),
+  );
+  const videos = withUrls.filter((f) => f.kind === "video");
+  const docs = withUrls.filter((f) => f.kind !== "video");
+
+  const [intake] = await db
+    .select()
+    .from(aiInsights)
+    .where(
+      and(eq(aiInsights.submissionId, id), eq(aiInsights.type, "intake_summary")),
+    )
+    .orderBy(desc(aiInsights.createdAt));
+  const ai = intake?.content as IntakeSummary | undefined;
+
+  const [mine] = await db
+    .select()
+    .from(evaluations)
+    .where(
+      and(
+        eq(evaluations.submissionId, id),
+        eq(evaluations.reviewerUserId, s.userId),
+      ),
+    );
+
+  const [gov] = await db
+    .select()
+    .from(governanceChecks)
+    .where(eq(governanceChecks.submissionId, id));
+
+  const d = sub.data as Record<string, unknown>;
+  const hasAi = !!(ai && (ai.overview || ai.clarifyingQuestions?.length));
+
+  return (
+    <div className="wrap stack">
+      <div>
+        <div className="eyebrow">Evaluation &amp; scoring</div>
+        <h1>{sub.initiativeName}</h1>
+        <p className="lede">
+          {sub.theme} · {sub.functionArea} · {sub.useCaseStage} · submitted by{" "}
+          {sub.submitterName}
+        </p>
+      </div>
+
+      {saved && (
+        <div className="notice n-good">
+          Assessment recorded. The submission has moved to the recommended lifecycle
+          step. You can revise this until the cycle closes.
+        </div>
+      )}
+
+      <div className="notice n-amber">
+        The criteria and weights are still being finalised — treat the total and
+        suggested tier as indicative.
+      </div>
+
+      <Scorecard
+        submissionId={id}
+        initial={
+          mine
+            ? {
+                scores: mine.scores,
+                rationale: mine.rationale,
+                recommendation: mine.recommendation,
+                additionalValidation: mine.additionalValidation ?? "None",
+                governance: gov
+                  ? {
+                      conflictsDeclared: gov.conflictsDeclared,
+                      bizFinValidated: gov.bizFinValidated,
+                      techValidated: gov.techValidated,
+                      cpoCaioReviewed: gov.cpoCaioReviewed,
+                    }
+                  : undefined,
+              }
+            : gov
+              ? {
+                  scores: {},
+                  governance: {
+                    conflictsDeclared: gov.conflictsDeclared,
+                    bizFinValidated: gov.bizFinValidated,
+                    techValidated: gov.techValidated,
+                    cpoCaioReviewed: gov.cpoCaioReviewed,
+                  },
+                }
+              : undefined
+        }
+      >
+        {hasAi && (
+          <div className="ai-block">
+            <div className="tag">
+              ● AI orientation summary — advisory only, verify against the submission
+            </div>
+            {ai!.overview && <p style={{ margin: "0 0 8px" }}>{ai!.overview}</p>}
+            {ai!.themeSuggestion && (
+              <p className="muted" style={{ margin: 0 }}>
+                Theme read: {ai!.themeSuggestion}
+              </p>
+            )}
+            {!!ai!.reportedMetrics?.length && (
+              <p className="muted" style={{ margin: "4px 0 0" }}>
+                Reported (unverified): {ai!.reportedMetrics.join("; ")}
+              </p>
+            )}
+            {!!ai!.clarifyingQuestions?.length && (
+              <>
+                <p className="muted" style={{ fontWeight: 700, margin: "10px 0 0" }}>
+                  Questions you may want to ask
+                </p>
+                <ul>
+                  {ai!.clarifyingQuestions.map((q, i) => (
+                    <li key={i}>{q}</li>
+                  ))}
+                </ul>
+              </>
+            )}
+            {!!ai!.completenessFlags?.length && (
+              <>
+                <p className="muted" style={{ fontWeight: 700, margin: "10px 0 0" }}>
+                  Completeness flags
+                </p>
+                <ul>
+                  {ai!.completenessFlags.map((q, i) => (
+                    <li key={i}>{q}</li>
+                  ))}
+                </ul>
+              </>
+            )}
+          </div>
+        )}
+
+        <div className="card">
+          <div className="section-head">
+            <span className="n">1</span>
+            <h2>Full submission</h2>
+          </div>
+          <Read label="Business challenge / opportunity" value={d.challenge} />
+          <Read label="AI solution" value={d.solution} />
+          <Read
+            label="AI technology / approach"
+            value={[...((d.aiTech as string[]) ?? []), d.aiTechOther].filter(Boolean)}
+          />
+          <Read label="Target users / customers" value={d.targetUsers} />
+          <Read label="What's new or different" value={d.whatsNew} />
+          <Read label="Impact" value={d.impact} />
+          <Read
+            label="Financial impact (as reported)"
+            value={[d.financialImpact, d.financialImpactDetail]
+              .filter(Boolean)
+              .join(" — ")}
+          />
+          <Read label="Evidence stage" value={d.evidenceStage} />
+          <Read label="Scalability potential" value={d.scalability} />
+          <Read label="Key metrics" value={d.keyMetrics} />
+          <Read label="Responsible AI" value={d.responsibleAI} />
+          <Read label="Adoption readiness" value={d.adoptionReadiness} />
+          <Read label="Team" value={d.teamMembers} />
+          <Read
+            label="Sponsor"
+            value={[d.sponsorName, d.sponsorRole].filter(Boolean).join(" — ")}
+          />
+          <Read label="Additional information" value={d.additionalInfo} />
+        </div>
+
+        <div className="card">
+          <div className="section-head">
+            <span className="n">▶</span>
+            <h2>Demo, links &amp; files</h2>
+          </div>
+
+          {videos.map((f) => (
+            <div key={f.id} className="ev-uploaded" style={{ marginBottom: 16 }}>
+              {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+              <video className="ev-video" src={f.href} controls preload="metadata" />
+              <div className="ev-file-row">
+                <div>
+                  <b>{f.filename}</b>
+                  <span className="muted"> · {(f.size / 1024 / 1024).toFixed(1)} MB</span>
+                </div>
+                <a className="btn ghost sm" href={f.href} target="_blank" rel="noreferrer">
+                  Download
+                </a>
+              </div>
+            </div>
+          ))}
+
+          {(!!d.liveLink || !!d.repoLink) && (
+            <ul className="attach">
+              {d.liveLink ? (
+                <li>
+                  <a href={String(d.liveLink)} target="_blank" rel="noreferrer">
+                    {String(d.liveLink)}
+                  </a>
+                  <span className="muted">live link</span>
+                </li>
+              ) : null}
+              {d.repoLink ? (
+                <li>
+                  <a href={String(d.repoLink)} target="_blank" rel="noreferrer">
+                    {String(d.repoLink)}
+                  </a>
+                  <span className="muted">repository</span>
+                </li>
+              ) : null}
+            </ul>
+          )}
+
+          {docs.length > 0 && (
+            <ul className="attach">
+              {docs.map((f) => (
+                <li key={f.id}>
+                  <a href={f.href} target="_blank" rel="noreferrer">
+                    {f.filename}
+                  </a>
+                  <span className="muted">
+                    {(f.size / 1024).toFixed(0)} KB · {f.contentType}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {videos.length === 0 && docs.length === 0 && !d.liveLink && !d.repoLink && (
+            <p className="muted">No supporting evidence provided.</p>
+          )}
+          {withUrls.length > 0 && (
+            <p className="muted" style={{ marginTop: 10 }}>
+              File and video links are valid for 5 minutes; reload the page to refresh them.
+            </p>
+          )}
+        </div>
+      </Scorecard>
+    </div>
+  );
+}

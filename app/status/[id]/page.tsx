@@ -41,6 +41,9 @@ export default async function StatusPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+    notFound();
+  }
   const [sub] = await db.select().from(submissions).where(eq(submissions.id, id));
   if (!sub) notFound();
 

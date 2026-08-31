@@ -77,19 +77,6 @@ export const evaluations = pgTable("evaluations", {
   byReviewer: index("evaluations_reviewer_idx").on(t.reviewerUserId),
 }));
 
-// ---- Governance checklist (per submission, human-confirmed) -----------
-export const governanceChecks = pgTable("governance_checks", {
-  submissionId: uuid("submission_id")
-    .references(() => submissions.id, { onDelete: "cascade" })
-    .primaryKey(),
-  conflictsDeclared: boolean("conflicts_declared").default(false).notNull(),
-  bizFinValidated: boolean("biz_fin_validated").default(false).notNull(),
-  techValidated: boolean("tech_validated").default(false).notNull(),
-  cpoCaioReviewed: boolean("cpo_caio_reviewed").default(false).notNull(),
-  updatedByUserId: uuid("updated_by_user_id").references(() => users.id),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
-
 // ---- Final decision by the panel chair --------------------------------
 export const decisions = pgTable("decisions", {
   id: uuid("id").defaultRandom().primaryKey(),

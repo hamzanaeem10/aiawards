@@ -94,12 +94,6 @@ export default function Evidence() {
           <div>
             <b>Product demo video</b>
             <span className="opt"> preferred</span>
-            <p className="ev-sub">
-              Strongly encouraged — reviewers watch it first. A short screen
-              recording of the solution working, ~2 minutes, compressed (1080p is
-              plenty).
-              {" "}{ACCEPTED_VIDEO_EXT.join(" / ")}, up to {humanSize(MAX_VIDEO_BYTES)}.
-            </p>
           </div>
         </div>
 

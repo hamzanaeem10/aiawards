@@ -1,0 +1,1 @@
+DROP TABLE "governance_checks" CASCADE;

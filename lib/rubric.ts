@@ -87,11 +87,6 @@ export const OUTCOME_STATUS: Record<string, string> = {
   noprogress: "NOT_PROGRESSED",
 };
 
-/** Award and Finalist can't be recorded until governance validations pass. */
-export function outcomeNeedsGovernance(outcome: string): boolean {
-  return outcome === "award" || outcome === "finalist";
-}
-
 const NEXT_STEP: Record<string, string> = {
   award:
     "Recommend for the JW AI Impact Award. Route to the CPO & Chief AI Officer for review and CEO approval, then move into Pilot & Scale support.",

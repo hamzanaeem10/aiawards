@@ -2,9 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { eq, and } from "drizzle-orm";
-import {
-  db, evaluations, submissions, governanceChecks, statusHistory, auditLog,
-} from "@/lib/db";
+import { db, evaluations, submissions, statusHistory, auditLog } from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import {
   CRITERIA,
@@ -13,16 +11,8 @@ import {
   tierFor,
   nextStepText,
   OUTCOME_STATUS,
-  outcomeNeedsGovernance,
   type CriterionKey,
 } from "@/lib/rubric";
-
-const GOV_KEYS = [
-  "conflictsDeclared",
-  "bizFinValidated",
-  "techValidated",
-  "cpoCaioReviewed",
-] as const;
 
 export async function recordAssessment(submissionId: string, formData: FormData) {
   const s = await getSession();
@@ -46,33 +36,6 @@ export async function recordAssessment(submissionId: string, formData: FormData)
   const recommendation = String(formData.get("recommendation") || "auto");
   const outcome = recommendation === "auto" ? tier.key : recommendation;
   const newStatus = OUTCOME_STATUS[outcome] ?? "IN_REVIEW";
-
-  // --- governance checklist (part of the evaluator's screen) -----------
-  const gov = Object.fromEntries(
-    GOV_KEYS.map((k) => [k, formData.get(k) === "on"]),
-  ) as Record<(typeof GOV_KEYS)[number], boolean>;
-
-  if (outcomeNeedsGovernance(outcome)) {
-    const ok =
-      gov.bizFinValidated &&
-      gov.techValidated &&
-      (outcome !== "award" || gov.cpoCaioReviewed);
-    if (!ok) {
-      throw new Error(
-        "This outcome needs Business & Finance and Tech/Control validation" +
-          (outcome === "award" ? " plus CPO & Chief AI Officer review" : "") +
-          " — tick the governance items before recording.",
-      );
-    }
-  }
-
-  await db
-    .insert(governanceChecks)
-    .values({ submissionId, ...gov, updatedByUserId: s.userId, updatedAt: new Date() })
-    .onConflictDoUpdate({
-      target: governanceChecks.submissionId,
-      set: { ...gov, updatedByUserId: s.userId, updatedAt: new Date() },
-    });
 
   // --- upsert this evaluator's evaluation ------------------------------
   const row = {

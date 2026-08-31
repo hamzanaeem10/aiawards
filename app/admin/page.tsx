@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { and, eq, desc, inArray, sql } from "drizzle-orm";
 import {
-  db, submissions, users, evaluations, governanceChecks, decisions, aiInsights,
+  db, submissions, users, evaluations, decisions, aiInsights,
 } from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { TIERS } from "@/lib/rubric";
@@ -21,13 +21,6 @@ const LABELS: Record<string, string> = {
   PILOT_SCALE: "Pilot & Scale",
   NOT_PROGRESSED: "Not progressed",
 };
-const GOV_ITEMS: [string, string][] = [
-  ["conflictsDeclared", "Conflicts declared"],
-  ["bizFinValidated", "Business & Finance validated"],
-  ["techValidated", "Tech & control validated"],
-  ["cpoCaioReviewed", "CPO & CAIO reviewed"],
-];
-
 export default async function AdminPage({
   searchParams,
 }: {
@@ -59,10 +52,6 @@ export default async function AdminPage({
     .select()
     .from(evaluations)
     .where(inArray(evaluations.submissionId, scope));
-  const allGov = await db
-    .select()
-    .from(governanceChecks)
-    .where(inArray(governanceChecks.submissionId, scope));
   const allDec = await db
     .select()
     .from(decisions)
@@ -86,6 +75,14 @@ export default async function AdminPage({
           Every submission and its recorded assessment. Evaluators score and set the
           outcome; here you compose and release feedback to the nominee.
         </p>
+        <div className="btn-row" style={{ marginTop: 14 }}>
+          <a className="btn ghost sm" href="/admin/export/submissions" download>
+            ⤓ Export submissions (CSV)
+          </a>
+          <a className="btn ghost sm" href="/admin/export/evaluations" download>
+            ⤓ Export evaluations (CSV)
+          </a>
+        </div>
       </div>
 
       {subs.length === 0 && (
@@ -96,9 +93,6 @@ export default async function AdminPage({
 
       {subs.map((sub) => {
         const evals = allEvals.filter((e) => e.submissionId === sub.id);
-        const gov = allGov.find((g) => g.submissionId === sub.id) as
-          | Record<string, boolean>
-          | undefined;
         const dec = allDec.find((d) => d.submissionId === sub.id);
         const cons = consensus.find((c) => c.submissionId === sub.id)
           ?.content as ConsensusDraft | undefined;
@@ -167,24 +161,6 @@ export default async function AdminPage({
                   )}
                 </p>
               )}
-            </div>
-
-            <div className="field">
-              <label className="flabel">Governance &amp; validation</label>
-              <div className="btn-row">
-                {GOV_ITEMS.map(([k, lbl]) => (
-                  <span
-                    key={k}
-                    className={`badge ${gov?.[k] ? "b-good" : "b-neutral"}`}
-                  >
-                    {gov?.[k] ? "✓ " : "· "}
-                    {lbl}
-                  </span>
-                ))}
-              </div>
-              <p className="muted" style={{ marginTop: 6 }}>
-                Set by the evaluator on the scoring screen.
-              </p>
             </div>
 
             <form action={generateConsensus} style={{ marginBottom: 14 }}>

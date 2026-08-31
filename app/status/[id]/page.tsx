@@ -13,14 +13,16 @@ const LABELS: Record<string, string> = {
   NOT_PROGRESSED: "Not progressed this cycle",
 };
 
-const LIFECYCLE = [
-  "SUBMITTED",
-  "MONTHLY_HERO",
-  "BIMONTHLY_REVIEW",
-  "QUARTERLY_FINALIST",
-  "AWARD",
-  "PILOT_SCALE",
-];
+const BLURB: Record<string, string> = {
+  SUBMITTED: "Received. It's in the queue for the awards panel to review.",
+  IN_REVIEW: "An evaluator is reviewing your submission.",
+  MONTHLY_HERO: "Recognised as a Monthly AI Hero.",
+  BIMONTHLY_REVIEW: "In the Bi-Monthly Review for feedback and development support.",
+  QUARTERLY_FINALIST: "Shortlisted as a Quarterly Finalist.",
+  AWARD: "Selected for the JW AI Impact Award.",
+  PILOT_SCALE: "Moving into pilot and scale support.",
+  NOT_PROGRESSED: "Not progressed this cycle — resubmission is welcome in a future cycle.",
+};
 
 const BADGE: Record<string, string> = {
   SUBMITTED: "b-info",
@@ -53,8 +55,6 @@ export default async function StatusPage({
     .from(decisions)
     .where(eq(decisions.submissionId, id));
 
-  const currentIdx = LIFECYCLE.indexOf(sub.status);
-
   return (
     <div className="wrap narrow stack">
       <div>
@@ -66,35 +66,12 @@ export default async function StatusPage({
       </div>
 
       <div className="card">
-        <div className="section-head" style={{ justifyContent: "space-between" }}>
-          <h2>Lifecycle</h2>
-          <span className={`badge ${BADGE[sub.status] ?? "b-neutral"} dot`}>
-            {LABELS[sub.status] ?? sub.status}
-          </span>
-        </div>
-        <ol className="stepper" style={{ marginTop: 14 }}>
-          {LIFECYCLE.map((s, i) => (
-            <li
-              key={s}
-              className={
-                sub.status === "NOT_PROGRESSED"
-                  ? i === 0
-                    ? "done"
-                    : ""
-                  : i < currentIdx
-                    ? "done"
-                    : i === currentIdx
-                      ? "current"
-                      : ""
-              }
-            >
-              {LABELS[s]}
-            </li>
-          ))}
-        </ol>
-        {sub.status === "NOT_PROGRESSED" && (
-          <p className="muted">Not progressed this cycle — resubmission is welcome in a future cycle.</p>
-        )}
+        <span className={`badge ${BADGE[sub.status] ?? "b-neutral"} dot`}>
+          {LABELS[sub.status] ?? sub.status}
+        </span>
+        <p style={{ marginTop: 12, marginBottom: 0 }}>
+          {BLURB[sub.status] ?? "Your submission is being processed."}
+        </p>
       </div>
 
       {dec?.feedbackReleased && dec.feedbackLetter && (
@@ -106,24 +83,26 @@ export default async function StatusPage({
         </div>
       )}
 
-      <div className="card">
-        <h2>History</h2>
-        <div className="table-wrap" style={{ marginTop: 14 }}>
-          <table>
-            <tbody>
-              {history.map((h) => (
-                <tr key={h.id}>
-                  <td style={{ whiteSpace: "nowrap" }}>
-                    {new Date(h.at).toLocaleString()}
-                  </td>
-                  <td>{LABELS[h.to] ?? h.to}</td>
-                  <td className="muted">{h.note}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      {history.length > 1 && (
+        <div className="card">
+          <h2>History</h2>
+          <div className="table-wrap" style={{ marginTop: 14 }}>
+            <table>
+              <tbody>
+                {history.map((h) => (
+                  <tr key={h.id}>
+                    <td style={{ whiteSpace: "nowrap" }}>
+                      {new Date(h.at).toLocaleString()}
+                    </td>
+                    <td>{LABELS[h.to] ?? h.to}</td>
+                    <td className="muted">{h.note}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

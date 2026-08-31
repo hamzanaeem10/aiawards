@@ -93,10 +93,11 @@ export default function Evidence() {
           <span className="ev-ico" aria-hidden="true">▶</span>
           <div>
             <b>Product demo video</b>
-            <span className="req"> *</span>
+            <span className="opt"> preferred</span>
             <p className="ev-sub">
-              A short screen recording of the solution working — keep it to ~2 minutes
-              and compressed (1080p is plenty).
+              Strongly encouraged — reviewers watch it first. A short screen
+              recording of the solution working, ~2 minutes, compressed (1080p is
+              plenty).
               {" "}{ACCEPTED_VIDEO_EXT.join(" / ")}, up to {humanSize(MAX_VIDEO_BYTES)}.
             </p>
           </div>
@@ -108,7 +109,6 @@ export default function Evidence() {
           type="file"
           name="demoVideo"
           accept={ACCEPTED_VIDEO_EXT.join(",") + ",video/*"}
-          required={!video}
           className="sr-file"
           tabIndex={-1}
           onChange={(e) => acceptVideo(e.target.files?.[0])}

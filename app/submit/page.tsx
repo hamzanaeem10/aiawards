@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { and, eq, gt } from "drizzle-orm";
 import { db, submissions, attachments, statusHistory, auditLog } from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { newKey, putObject } from "@/lib/storage";
@@ -11,10 +12,20 @@ import {
   isVideo,
 } from "@/lib/uploads";
 import Evidence from "./Evidence";
+import SubmitButton from "./SubmitButton";
 
 const FUNCTIONS = [
-  "Commercial", "Technology", "People & Organization", "Finance",
-  "Customer Care", "Risk, Compliance & Privacy", "Corporate & Regulatory Affairs", "Other",
+  "Commercial",
+  "Technology",
+  "Digital",
+  "Enterprise / B2B",
+  "Financial Services (JazzCash)",
+  "Customer Experience",
+  "Finance",
+  "People & Organization",
+  "Risk, Compliance & Privacy",
+  "Corporate & Regulatory Affairs",
+  "Other",
 ];
 const STAGES = ["Under Development", "Pilot or Testing", "Implemented"];
 const TECH = [
@@ -51,6 +62,23 @@ async function submitInitiative(formData: FormData) {
     additionalInfo: g("additionalInfo"),
   };
 
+  const initiativeName = g("initiativeName");
+  const submitterEmail = g("submitterEmail");
+
+  // Guard against a double-submit (fast double-click, browser retry): if an
+  // identical submission landed in the last 2 minutes, reuse it.
+  const [dupe] = await db
+    .select({ id: submissions.id })
+    .from(submissions)
+    .where(
+      and(
+        eq(submissions.initiativeName, initiativeName),
+        eq(submissions.submitterEmail, submitterEmail),
+        gt(submissions.createdAt, new Date(Date.now() - 2 * 60 * 1000)),
+      ),
+    );
+  if (dupe) redirect(`/status/${dupe.id}`);
+
   const [row] = await db
     .insert(submissions)
     .values({
@@ -58,8 +86,8 @@ async function submitInitiative(formData: FormData) {
       data,
       submitterUserId: session?.userId ?? null,
       submitterName: g("submitterName"),
-      submitterEmail: g("submitterEmail"),
-      initiativeName: g("initiativeName"),
+      submitterEmail,
+      initiativeName,
       theme: g("theme"),
       functionArea: g("functionArea"),
       useCaseStage: g("useCaseStage"),
@@ -150,8 +178,8 @@ export default async function SubmitPage() {
         <h1>AI Initiative Submission</h1>
         <p>
           The more concrete, the less back-and-forth later. Ideas at any stage are
-          welcome. A short demo video is required — the evaluator sees your full
-          submission, the demo, and every link and file you add.
+          welcome. A short demo video is strongly preferred — the evaluator sees
+          your full submission and every link and file you add.
         </p>
       </section>
 
@@ -435,9 +463,7 @@ export default async function SubmitPage() {
         </Section>
 
         <div className="btn-row">
-          <button className="btn" type="submit">
-            Submit initiative →
-          </button>
+          <SubmitButton />
         </div>
       </form>
     </div>

@@ -30,10 +30,6 @@ export default async function LoginPage({
       <div>
         <div className="eyebrow">Awards panel &amp; administration</div>
         <h1>Sign in</h1>
-        <p className="lede">
-          For the evaluation committee and the awards admin. Accounts are issued by
-          the administrator.
-        </p>
       </div>
       {e && <div className="notice n-danger">Incorrect email or password.</div>}
       <form action={login} className="card pad-lg">

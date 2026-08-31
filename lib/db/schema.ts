@@ -5,7 +5,6 @@ import {
   timestamp,
   integer,
   jsonb,
-  boolean,
   index,
 } from "drizzle-orm/pg-core";
 
@@ -64,7 +63,7 @@ export const evaluations = pgTable("evaluations", {
     .references(() => submissions.id, { onDelete: "cascade" })
     .notNull(),
   reviewerUserId: uuid("reviewer_user_id").references(() => users.id).notNull(),
-  // { impact:1..5, evidence:1..5, innovation, scalability, responsible, adoption }
+  // { <criterion key>: 1..5 } — keys come from lib/rubric.ts CRITERIA
   scores: jsonb("scores").notNull().$type<Record<string, number>>(),
   weightedTotal: integer("weighted_total").notNull(), // stored x10 (e.g. 837 = 83.7)
   tier: text("tier").notNull(),
@@ -75,23 +74,6 @@ export const evaluations = pgTable("evaluations", {
 }, (t) => ({
   bySubmission: index("evaluations_submission_idx").on(t.submissionId),
   byReviewer: index("evaluations_reviewer_idx").on(t.reviewerUserId),
-}));
-
-// ---- Final decision by the panel chair --------------------------------
-export const decisions = pgTable("decisions", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  submissionId: uuid("submission_id")
-    .references(() => submissions.id, { onDelete: "cascade" })
-    .notNull(),
-  outcome: text("outcome").notNull(), // tier key
-  newStatus: text("new_status").notNull(),
-  consensusNote: text("consensus_note"),
-  feedbackLetter: text("feedback_letter"),
-  feedbackReleased: boolean("feedback_released").default(false).notNull(),
-  decidedByUserId: uuid("decided_by_user_id").references(() => users.id).notNull(),
-  decidedAt: timestamp("decided_at").defaultNow().notNull(),
-}, (t) => ({
-  bySubmission: index("decisions_submission_idx").on(t.submissionId),
 }));
 
 export const statusHistory = pgTable("status_history", {
@@ -109,7 +91,7 @@ export const statusHistory = pgTable("status_history", {
 }));
 
 // ---- AI insights: ADVISORY ONLY. Never scores. Always labeled + editable.
-// type: 'intake_summary' | 'consensus_draft' | 'feedback_letter_draft'
+// type: 'intake_summary' (Claude, on submit) | 'ai_assessment' (Groq, on demand)
 export const aiInsights = pgTable("ai_insights", {
   id: uuid("id").defaultRandom().primaryKey(),
   submissionId: uuid("submission_id")

@@ -30,12 +30,12 @@ const BADGE: Record<string, string> = {
 export default async function QueuePage({
   searchParams,
 }: {
-  searchParams: Promise<{ page?: string }>;
+  searchParams: Promise<{ page?: string; recorded?: string }>;
 }) {
   const s = await getSession();
   if (!s || (s.role !== "reviewer" && s.role !== "chair")) redirect("/login");
 
-  const { page: pageRaw } = await searchParams;
+  const { page: pageRaw, recorded } = await searchParams;
   const page = Math.max(0, Number(pageRaw) - 1 || 0);
 
   const [{ count }] = await db
@@ -76,12 +76,13 @@ export default async function QueuePage({
       <div>
         <div className="eyebrow">For panel evaluators</div>
         <h1>Submissions to evaluate</h1>
-        <p className="lede">
-          Every submission, with the full detail, the demo, and every attachment.
-          Any AI note is for orientation only — the score and the outcome are
-          entirely yours.
-        </p>
       </div>
+
+      {recorded !== undefined && (
+        <div className="notice n-good">
+          ✓ Assessment recorded{recorded ? ` for ${recorded}` : ""}.
+        </div>
+      )}
 
       <div className="card" style={{ padding: 0 }}>
         {count === 0 ? (

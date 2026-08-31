@@ -5,7 +5,6 @@ const globalForBoss = globalThis as unknown as { boss?: PgBoss };
 
 export const QUEUES = {
   intake: "ai-intake",
-  synthesis: "ai-synthesis",
 } as const;
 
 export function makeBoss() {

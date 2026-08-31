@@ -1,8 +1,7 @@
 import "dotenv/config";
 import { eq, ne } from "drizzle-orm";
-import { db, submissions, evaluations, aiInsights, users, decisions } from "../lib/db";
+import { db, submissions, aiInsights } from "../lib/db";
 import { generateIntakeSummary } from "../lib/ai/intake";
-import { generateConsensusDraft } from "../lib/ai/synthesis";
 import { QUEUES, makeBoss } from "../lib/queue";
 
 // Advisory work: keep concurrency low so a 3000-submission cycle can't stampede
@@ -55,47 +54,7 @@ async function main() {
     console.log(`[intake] summary stored for ${submissionId}`);
   });
 
-  await boss.work(QUEUES.synthesis, WORK_OPTS, async ([job]) => {
-    const { submissionId } = job.data as { submissionId: string };
-    const [sub] = await db.select().from(submissions).where(eq(submissions.id, submissionId));
-    if (!sub) return;
-
-    const evals = await db
-      .select({
-        scores: evaluations.scores,
-        weightedTotal: evaluations.weightedTotal,
-        tier: evaluations.tier,
-        rationale: evaluations.rationale,
-        name: users.name,
-      })
-      .from(evaluations)
-      .leftJoin(users, eq(users.id, evaluations.reviewerUserId))
-      .where(eq(evaluations.submissionId, submissionId));
-
-    const [dec] = await db.select().from(decisions).where(eq(decisions.submissionId, submissionId));
-
-    const { model, content } = await generateConsensusDraft({
-      initiativeName: sub.initiativeName,
-      panelOutcomeLabel: dec?.outcome ?? "(not yet decided)",
-      reviewers: evals.map((e) => ({
-        name: e.name ?? "Reviewer",
-        scores: e.scores,
-        weightedTotal: e.weightedTotal / 10,
-        tier: e.tier,
-        rationale: e.rationale,
-      })),
-    });
-
-    await db.insert(aiInsights).values({
-      submissionId,
-      type: "consensus_draft",
-      model,
-      content: content as any,
-    });
-    console.log(`[synthesis] consensus draft stored for ${submissionId}`);
-  });
-
-  console.log("worker running: ai-intake, ai-synthesis");
+  console.log("worker running: ai-intake");
 }
 
 main().catch((e) => {

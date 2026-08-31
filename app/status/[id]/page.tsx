@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { eq, asc } from "drizzle-orm";
-import { db, submissions, statusHistory, decisions } from "@/lib/db";
+import { db, submissions, statusHistory } from "@/lib/db";
 
 const LABELS: Record<string, string> = {
   SUBMITTED: "Submitted",
@@ -53,11 +53,6 @@ export default async function StatusPage({
     .where(eq(statusHistory.submissionId, id))
     .orderBy(asc(statusHistory.at));
 
-  const [dec] = await db
-    .select()
-    .from(decisions)
-    .where(eq(decisions.submissionId, id));
-
   return (
     <div className="wrap narrow stack">
       <div>
@@ -76,15 +71,6 @@ export default async function StatusPage({
           {BLURB[sub.status] ?? "Your submission is being processed."}
         </p>
       </div>
-
-      {dec?.feedbackReleased && dec.feedbackLetter && (
-        <div className="card">
-          <h2>Panel feedback</h2>
-          <p style={{ whiteSpace: "pre-wrap", marginTop: 12, marginBottom: 0 }}>
-            {dec.feedbackLetter}
-          </p>
-        </div>
-      )}
 
       {history.length > 1 && (
         <div className="card">

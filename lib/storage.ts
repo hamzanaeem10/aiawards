@@ -46,15 +46,23 @@ export async function putObject(key: string, body: Buffer, contentType: string) 
   );
 }
 
-/** Short-lived download URL — the reviewer's browser fetches attachments directly. */
-export async function signedDownloadUrl(key: string, filename?: string) {
+/**
+ * Short-lived direct URL. `attachment: true` forces a download (docs);
+ * otherwise the object is served inline (video plays in place).
+ */
+export async function signedDownloadUrl(
+  key: string,
+  filename?: string,
+  attachment = false,
+) {
+  const disp = attachment ? "attachment" : "inline";
   return getSignedUrl(
     s3,
     new GetObjectCommand({
       Bucket: bucket,
       Key: key,
       ResponseContentDisposition: filename
-        ? `inline; filename="${filename}"`
+        ? `${disp}; filename="${filename}"`
         : undefined,
     }),
     { expiresIn: 300 },

@@ -1,15 +1,20 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { and, eq, desc, inArray, sql } from "drizzle-orm";
-import {
-  db, submissions, users, evaluations, decisions, aiInsights,
-} from "@/lib/db";
+import { desc, inArray, sql } from "drizzle-orm";
+import { db, submissions, users, evaluations } from "@/lib/db";
 import { getSession } from "@/lib/auth";
-import { TIERS } from "@/lib/rubric";
-import { saveFeedback, generateConsensus } from "./actions";
-import type { ConsensusDraft } from "@/lib/ai/synthesis";
+import { CRITERIA, TIERS, tierFor } from "@/lib/rubric";
 
 const PAGE_SIZE = 25;
+
+// short column headers for the evaluator × criterion matrix
+const SHORT: Record<string, string> = {
+  impact: "Impact",
+  evidence: "Evidence",
+  innovation: "Innovation",
+  scalability: "Scale & App.",
+  responsible: "Resp. AI",
+};
 
 const LABELS: Record<string, string> = {
   SUBMITTED: "Submitted",
@@ -52,29 +57,12 @@ export default async function AdminPage({
     .select()
     .from(evaluations)
     .where(inArray(evaluations.submissionId, scope));
-  const allDec = await db
-    .select()
-    .from(decisions)
-    .where(inArray(decisions.submissionId, scope));
-  const consensus = await db
-    .select()
-    .from(aiInsights)
-    .where(
-      and(
-        eq(aiInsights.type, "consensus_draft"),
-        inArray(aiInsights.submissionId, scope),
-      ),
-    );
 
   return (
     <div className="wrap stack">
       <div>
         <div className="eyebrow">Administration</div>
         <h1>Submissions overview</h1>
-        <p className="lede">
-          Every submission and its recorded assessment. Evaluators score and set the
-          outcome; here you compose and release feedback to the nominee.
-        </p>
         <div className="btn-row" style={{ marginTop: 14 }}>
           <a className="btn ghost sm" href="/admin/export/submissions" download>
             ⤓ Export submissions (CSV)
@@ -92,19 +80,28 @@ export default async function AdminPage({
       )}
 
       {subs.map((sub) => {
-        const evals = allEvals.filter((e) => e.submissionId === sub.id);
-        const dec = allDec.find((d) => d.submissionId === sub.id);
-        const cons = consensus.find((c) => c.submissionId === sub.id)
-          ?.content as ConsensusDraft | undefined;
-        const avg = evals.length
-          ? Math.round(
-              (evals.reduce((a, e) => a + e.weightedTotal / 10, 0) / evals.length) * 10,
-            ) / 10
+        const evals = allEvals
+          .filter((e) => e.submissionId === sub.id)
+          .sort((a, b) => +new Date(a.submittedAt) - +new Date(b.submittedAt));
+
+        const n = evals.length;
+        const avg = n
+          ? evals.reduce((a, e) => a + e.weightedTotal / 10, 0) / n
           : null;
+        const avgTier = avg != null ? tierFor(avg) : null;
         const spread =
-          evals.length > 1
-            ? Math.max(...evals.map((e) => e.weightedTotal)) -
-              Math.min(...evals.map((e) => e.weightedTotal))
+          n > 1
+            ? (Math.max(...evals.map((e) => e.weightedTotal)) -
+                Math.min(...evals.map((e) => e.weightedTotal))) /
+              10
+            : 0;
+        // mean score per criterion across the panel
+        const critAvg = (key: string) =>
+          n
+            ? evals.reduce(
+                (a, e) => a + (Number((e.scores as Record<string, number>)[key]) || 0),
+                0,
+              ) / n
             : 0;
 
         return (
@@ -118,80 +115,110 @@ export default async function AdminPage({
               <Link href={`/status/${sub.id}`}>status page</Link>
             </p>
 
-            <div className="field" style={{ marginTop: 16 }}>
-              <label className="flabel">Recorded assessments</label>
-              {evals.length === 0 ? (
-                <p className="muted">No assessment recorded yet.</p>
+            {/* ---- cumulative panel score ---- */}
+            <div className="cume">
+              {avg == null ? (
+                <span className="muted">No assessment recorded yet.</span>
               ) : (
+                <>
+                  <div className="cume-num">
+                    {avg.toFixed(1)}
+                    <span>/ 100</span>
+                  </div>
+                  <div className="cume-meta">
+                    <span className="badge b-info">{avgTier?.label}</span>
+                    <span className="muted">
+                      cumulative across {n} evaluator{n === 1 ? "" : "s"}
+                    </span>
+                    {spread >= 15 && (
+                      <span className="badge b-amber">divergence {spread.toFixed(1)}</span>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+
+            {n > 0 && (
+              <div className="field" style={{ marginTop: 16 }}>
+                <label className="flabel">
+                  Each evaluator&apos;s scoring
+                </label>
                 <div className="table-wrap">
                   <table>
                     <thead>
                       <tr>
                         <th>Evaluator</th>
-                        <th>Total</th>
+                        {CRITERIA.map((c) => (
+                          <th key={c.key} style={{ textAlign: "center" }}>
+                            {SHORT[c.key] ?? c.label}
+                            <br />
+                            <span className="muted" style={{ fontWeight: 400 }}>{c.weight}%</span>
+                          </th>
+                        ))}
+                        <th style={{ textAlign: "center" }}>Total</th>
                         <th>Tier</th>
-                        <th>Recommendation</th>
-                        <th>Rationale</th>
                       </tr>
                     </thead>
                     <tbody>
                       {evals.map((e) => {
                         const r = evaluators.find((x) => x.id === e.reviewerUserId);
+                        const sc = e.scores as Record<string, number>;
                         return (
                           <tr key={e.id}>
                             <td>{r?.name ?? "Evaluator"}</td>
-                            <td>{(e.weightedTotal / 10).toFixed(1)}</td>
+                            {CRITERIA.map((c) => (
+                              <td key={c.key} style={{ textAlign: "center" }}>
+                                {sc[c.key] ?? "—"}
+                              </td>
+                            ))}
+                            <td style={{ textAlign: "center", fontWeight: 600 }}>
+                              {(e.weightedTotal / 10).toFixed(1)}
+                            </td>
                             <td>{TIERS.find((t) => t.key === e.tier)?.label ?? e.tier}</td>
-                            <td>{e.recommendation}</td>
-                            <td className="muted">{e.rationale}</td>
                           </tr>
                         );
                       })}
+                      <tr style={{ borderTop: "2px solid var(--line)" }}>
+                        <td style={{ fontWeight: 700 }}>Panel average</td>
+                        {CRITERIA.map((c) => (
+                          <td key={c.key} style={{ textAlign: "center", fontWeight: 600 }}>
+                            {critAvg(c.key).toFixed(1)}
+                          </td>
+                        ))}
+                        <td style={{ textAlign: "center", fontWeight: 700, color: "var(--maroon)" }}>
+                          {avg!.toFixed(1)}
+                        </td>
+                        <td style={{ fontWeight: 600 }}>{avgTier?.label}</td>
+                      </tr>
                     </tbody>
                   </table>
                 </div>
-              )}
-              {avg != null && (
-                <p style={{ fontSize: "0.86rem", marginTop: 8 }}>
-                  <b>Average: {avg.toFixed(1)} / 100</b>{" "}
-                  {spread >= 15 && (
-                    <span className="badge b-amber">
-                      evaluator divergence {(spread / 10).toFixed(1)}
-                    </span>
-                  )}
-                </p>
-              )}
-            </div>
 
-            <form action={generateConsensus} style={{ marginBottom: 14 }}>
-              <input type="hidden" name="submissionId" value={sub.id} />
-              <button className="btn ghost sm" disabled={evals.length === 0}>
-                Generate AI feedback draft (advisory)
-              </button>
-            </form>
-
-            <form action={saveFeedback}>
-              <input type="hidden" name="submissionId" value={sub.id} />
-              <div className="field">
-                <label className="flabel">
-                  Feedback letter to nominee{" "}
-                  {cons && <span className="badge b-amber">AI draft — edit before saving</span>}
-                </label>
-                <textarea
-                  name="feedbackLetter"
-                  defaultValue={dec?.feedbackLetter ?? cons?.feedbackLetter ?? ""}
-                />
+                <ul className="eval-notes">
+                  {evals.map((e) => {
+                    const r = evaluators.find((x) => x.id === e.reviewerUserId);
+                    return (
+                      <li key={e.id}>
+                        <b>{r?.name ?? "Evaluator"}</b>
+                        {e.recommendation && e.recommendation !== "auto" && (
+                          <span className="badge b-neutral" style={{ marginLeft: 6 }}>
+                            recommends {e.recommendation}
+                          </span>
+                        )}
+                        {e.additionalValidation && e.additionalValidation !== "None" && (
+                          <span className="badge b-amber" style={{ marginLeft: 6 }}>
+                            {e.additionalValidation}
+                          </span>
+                        )}
+                        {e.rationale && (
+                          <div className="muted" style={{ marginTop: 2 }}>{e.rationale}</div>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
               </div>
-              <label className="checkline">
-                <input
-                  type="checkbox"
-                  name="feedbackReleased"
-                  defaultChecked={dec?.feedbackReleased}
-                />
-                <span>Release this feedback to the nominee&apos;s status page</span>
-              </label>
-              <button className="btn" style={{ marginTop: 8 }}>Save feedback</button>
-            </form>
+            )}
           </div>
         );
       })}

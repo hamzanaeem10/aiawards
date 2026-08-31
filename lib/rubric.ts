@@ -10,8 +10,8 @@
 export const CRITERIA = [
   {
     key: "impact",
-    label: "Impact",
-    weight: 30,
+    label: "Impact (incl. financial)",
+    weight: 45,
     desc: "The real difference this makes for customers, employees, or the business — including quantified financial impact (revenue, cost savings/avoidance, efficiency) where applicable.",
     scale: ["Negligible", "Limited", "Moderate", "Strong", "Exceptional"],
   },
@@ -31,9 +31,9 @@ export const CRITERIA = [
   },
   {
     key: "scalability",
-    label: "Scalability",
-    weight: 15,
-    desc: "Potential to grow beyond the originating team.",
+    label: "Scalability and Applicability",
+    weight: 10,
+    desc: "Potential to grow beyond the originating team, and how broadly the approach applies to other use cases, functions or markets.",
     scale: ["Single use", "Team-only", "Function-wide", "Company-wide", "Multi-market"],
   },
   {
@@ -42,13 +42,6 @@ export const CRITERIA = [
     weight: 10,
     desc: "Data privacy, fairness, explainability and human oversight.",
     scale: ["Not addressed", "Partial", "Adequate", "Strong", "Exemplary"],
-  },
-  {
-    key: "adoption",
-    label: "Adoption Readiness",
-    weight: 10,
-    desc: "How ready the solution is to be used day-to-day.",
-    scale: ["Concept only", "Early adoption", "Building traction", "Broadly adopted", "Fully embedded"],
   },
 ] as const;
 

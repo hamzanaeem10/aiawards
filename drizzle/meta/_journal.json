@@ -29,6 +29,13 @@
       "when": 1788171297660,
       "tag": "0003_concerned_jamie_braddock",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1788177511902,
+      "tag": "0004_good_goliath",
+      "breakpoints": true
     }
   ]
 }

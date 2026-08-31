@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useFormStatus } from "react-dom";
 import {
   CRITERIA,
   TIERS,
@@ -9,6 +10,15 @@ import {
   nextStepText,
 } from "@/lib/rubric";
 import { recordAssessment } from "./actions";
+
+function RecordButton({ label }: { label: string }) {
+  const { pending } = useFormStatus();
+  return (
+    <button className="btn" type="submit" disabled={pending} aria-busy={pending}>
+      {pending ? "Submitting…" : label}
+    </button>
+  );
+}
 
 const TIER_CLASS: Record<string, string> = {
   award: "tier-award",
@@ -28,12 +38,10 @@ type Initial = {
 export default function Scorecard({
   submissionId,
   initial,
-  done,
   children,
 }: {
   submissionId: string;
   initial?: Initial;
-  done?: boolean;
   children: React.ReactNode;
 }) {
   const [scores, setScores] = useState<Record<string, number>>(initial?.scores ?? {});
@@ -158,16 +166,7 @@ export default function Scorecard({
         </div>
 
         <div className="rail-foot">
-          <button className="btn" type="submit">
-            {hasRecorded ? "Update assessment" : "Record assessment"}
-          </button>
-          <p className="muted">
-            {done
-              ? "Recorded. Editing here overwrites your assessment."
-              : hasRecorded
-                ? "You've already recorded this — changes overwrite it."
-                : "The submission moves to the recommended step when you record."}
-          </p>
+          <RecordButton label={hasRecorded ? "Update assessment" : "Record assessment"} />
         </div>
       </aside>
     </form>

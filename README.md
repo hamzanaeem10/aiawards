@@ -11,39 +11,51 @@ maroon/aubergine, soft elevation). Shared chrome in `app/components/SiteHeader.t
 with the JazzWorld lockup (`app/components/Logo.tsx` — placeholder mark, swap in the
 official SVG when available).
 
-## Assessment framework — provisional
+## Assessment framework
 
-The criteria / weights / thresholds live in `lib/rubric.ts` and are **not finalised**.
-Every total is shown as "indicative"; a draft-framework banner appears on the evaluate
-screen. Finalise by editing that one file.
+The criteria, weights and tier thresholds are the single source of truth in
+`lib/rubric.ts` — the scorecard, the AI assessment prompt, the CSV export and the
+lifecycle mapping all read from it. Current model: Impact (incl. financial) 45 ·
+Evidence 20 · AI Innovation 15 · Scalability and Applicability 10 · Responsible AI
+10. Tier bands are still provisional and every total is shown as "indicative".
+Change the model by editing that one file.
 
 ## Scoring policy (important)
 
-**All scoring and outcomes are done by humans.** The six weighted criteria
-(Impact 30 / Evidence 20 / AI Innovation 15 / Scalability 15 / Responsible AI 10 /
-Adoption 10), the tier, and the final recommendation are written only by a reviewer's
-or the panel chair's action (`app/committee/.../actions.ts`, `app/admin/assign/actions.ts`).
+**The score of record, the tier, and every lifecycle outcome are written only by a
+human** — a reviewer's or the panel chair's `recordAssessment` action
+(`app/committee/evaluate/[id]/actions.ts`) is the single writer of the
+`evaluations` table and the only thing that advances a submission.
 
-Claude is used at exactly two advisory points, both **labelled in the UI and fully
-editable**:
+AI is used at three points, all **labelled in the UI, none of which write to
+`evaluations` or the lifecycle**:
 
 | Where | What | Never |
 |---|---|---|
-| On submission intake (`lib/ai/intake.ts`) | Orientation summary, clarifying questions, completeness flags, similarity note | score / rank / recommend |
-| After reviewers score (`lib/ai/synthesis.ts`) | Draft consensus note + draft feedback letter for the chair to edit | change a score / decide the outcome |
+| Submission intake — Claude (`lib/ai/intake.ts`) | Orientation summary, clarifying questions, completeness flags | score / rank / recommend |
+| **Evaluate screen, on demand — Groq (`lib/ai/assessment.ts`)** | A **supplementary** 1–5 score per criterion + a weighted total, shown as a second opinion next to the evaluator's own scoring | pre-fill the evaluator's inputs / change the outcome / touch the lifecycle |
 
-The system prompt in `lib/ai/client.ts` (`ADVISORY_SYSTEM`) hard-codes this boundary.
-Set `AI_DISABLED=1` and the portal works fully with no AI.
+The Groq assessment stores an `ai_insights` row (`type: "ai_assessment"`), never
+an `evaluations` row. The weighted total is recomputed by the app on the human
+formula (`weightedTotal`) from the model's per-criterion scores — the model's own
+arithmetic is discarded. The evaluate screen labels it *"supplementary, not the
+panel's decision"*. Leave `GROQ_API_KEY` blank and the button disappears;
+`AI_DISABLED=1` still turns off the Claude features independently.
 
 ## Supporting evidence
 
-The submit form (`app/submit/Evidence.tsx`) collects a **required demo video**
-(mp4/mov/webm, ≤ 250 MB — inline preview before submit), an optional **live link**
-and **code repository** URL, and up to 6 optional **supporting files** (≤ 25 MB
-each). Limits live in `lib/uploads.ts` and are re-checked in the submit server
-action. Videos post through the server action, so `next.config.js` sets
-`serverActions.bodySizeLimit` to `300mb`. The evaluate screen plays the demo
-inline and lists every link/file with 5-minute signed URLs.
+The submit form (`app/submit/Evidence.tsx`) collects a **demo-video link**
+(preferred, not required), an optional **live link** and **code repository**
+URL, and up to 5 optional **supporting files** (≤ 10 MB each; limits in
+`lib/uploads.ts`, re-checked server-side).
+
+The demo video is a **shared link, not an upload** — nominees put it on
+**OneDrive** with "anyone with the link can view". `lib/videoEmbed.ts` turns a
+OneDrive link into an inline `<video>` on the evaluate screen (via the consumer
+`shares` content API); if it can't play, `DemoPlayer` shows a clean
+**"Watch the demo ↗"** panel. (SharePoint / Stream / Loom / YouTube / direct
+file URLs are also handled best-effort, but OneDrive is what the form asks for.)
+Supporting files are stored in object storage and served with 5-minute signed URLs.
 
 ## Roles
 
@@ -58,7 +70,7 @@ npm install
 npm run db:generate           # generate SQL migration from lib/db/schema.ts
 npm run db:migrate
 npm run db:seed               # test users, password: password123
-npm run worker &              # background jobs (intake + synthesis)
+npm run worker &              # background job: the Claude intake summary
 npm run dev                   # http://localhost:3000
 ```
 
@@ -69,19 +81,21 @@ Seeded logins: `admin@ / chair@ / reviewer1@ / reviewer2@ / nominee@jazzworld.te
 
 ## Flow
 
-1. `/submit` — nominee fills the form, adds the demo video + links + files →
-   stored in Postgres + MinIO, status `SUBMITTED`, advisory intake job enqueued.
+1. `/submit` — nominee fills the form, adds a demo-video link + optional live
+   link / repo / files → stored in Postgres (+ object storage for files), status
+   `SUBMITTED`, advisory Claude intake job enqueued.
 2. Worker calls Claude → `ai_insights` row (`intake_summary`), advisory only.
 3. `/committee/queue` — every submission, paginated. Any signed-in evaluator
-   (`reviewer` / `chair`) opens one.
-4. `/committee/evaluate/[id]` — one self-contained screen: full submission +
-   demo + attachments, the 6-criterion score with a live weighted total and
-   recommended next step, the governance checklist, and the recommendation.
-   **Record assessment** auto-advances the submission to the suggested lifecycle
-   step (Award/Finalist are gated on the governance checks).
-5. `/admin` — read-only overview of every submission and its recorded assessment;
-   compose and release the feedback letter to the nominee (optional AI draft).
-6. `/status/[id]` — nominee tracks status and reads released feedback.
+   (`reviewer` / `chair`) opens one — no cap on how many review a submission.
+4. `/committee/evaluate/[id]` — one screen: full submission + demo + attachments,
+   an optional on-demand **Groq AI assessment** (supplementary), then the
+   evaluator scores the criteria (live weighted total). **Record assessment**
+   auto-advances the submission to the tier of the **running panel average**
+   across all recorded assessments.
+5. `/admin` — per submission: the cumulative panel score, the per-evaluator ×
+   per-criterion matrix with a panel-average row, and each evaluator's notes.
+   CSV export of submissions (with panel averages) and of evaluations.
+6. `/status/[id]` — nominee tracks the lifecycle status.
 
 ## Scale & resilience (sized for ~3000 submissions / cycle)
 
@@ -151,14 +165,15 @@ Then on **Vercel** (import `hamzanaeem10/aiawards`), with two constraints:
 1. **No worker on serverless.** Keep `AI_DISABLED=1` — `enqueue()` is a no-op and
    the portal is fully functional without AI. (To enable AI later, run
    `npm run worker` on any always-on box with the same `DATABASE_URL`.)
-2. **4.5 MB request-body cap.** Set `NEXT_PUBLIC_MAX_VIDEO_MB=4`,
-   `NEXT_PUBLIC_MAX_FILE_MB=3`, `NEXT_PUBLIC_MAX_FILES=3`,
+2. **4.5 MB request-body cap.** The demo video is a link, so only supporting
+   files matter — set `NEXT_PUBLIC_MAX_FILE_MB=3`, `NEXT_PUBLIC_MAX_FILES=3`,
    `SERVER_ACTION_BODY_LIMIT=4mb`.
 
 Vercel env vars: `AUTH_SECRET`, `DATABASE_URL` (Neon pooled), `AWS_ACCESS_KEY_ID`,
 `AWS_SECRET_ACCESS_KEY`, `AWS_ENDPOINT_URL_S3`, `AWS_REGION`, `S3_BUCKET=attachments`,
-`AI_DISABLED=1`, and the four upload overrides. Then sign in at `/login`
-(`admin@jazzworld.test` / `password123`).
+`AI_DISABLED=1`, `GROQ_API_KEY` + `GROQ_MODEL` (for the supplementary AI
+assessment — omit to hide it), and the three upload overrides. Then sign in at
+`/login` (`admin@jazzworld.test` / `password123`).
 
 For production scale, use the Docker stack above — it's what the app is built for.
 

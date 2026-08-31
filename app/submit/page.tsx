@@ -4,27 +4,29 @@ import { db, submissions, attachments, statusHistory, auditLog } from "@/lib/db"
 import { getSession } from "@/lib/auth";
 import { newKey, putObject } from "@/lib/storage";
 import { enqueue, QUEUES } from "@/lib/queue";
-import {
-  MAX_VIDEO_BYTES,
-  MAX_FILE_BYTES,
-  MAX_FILES,
-  humanSize,
-  isVideo,
-} from "@/lib/uploads";
+import { MAX_FILE_BYTES, MAX_FILES, humanSize } from "@/lib/uploads";
 import Evidence from "./Evidence";
 import SubmitButton from "./SubmitButton";
 
 const FUNCTIONS = [
-  "Commercial",
+  "Jazz GSM",
+  "Jazz Business",
+  "Enterprise Solutions",
+  "Consumer",
   "Technology",
-  "Digital",
-  "Enterprise / B2B",
-  "Financial Services (JazzCash)",
-  "Customer Experience",
+  "Artificial Intelligence",
+  "Cyber Security",
+  "Teknosys",
+  "JazzCash",
+  "Jazz LifeStyle Ventures (JLV)",
   "Finance",
+  "Strategy",
   "People & Organization",
-  "Risk, Compliance & Privacy",
+  "Legal Affairs",
+  "Compliance",
+  "Internal Audit",
   "Corporate & Regulatory Affairs",
+  "President Office",
   "Other",
 ];
 const STAGES = ["Under Development", "Pilot or Testing", "Implemented"];
@@ -57,6 +59,7 @@ async function submitInitiative(formData: FormData) {
     keyMetrics: g("keyMetrics"),
     responsibleAI: g("responsibleAI"),
     adoptionReadiness: g("adoptionReadiness"),
+    demoVideoUrl: g("demoVideoUrl"),
     liveLink: g("liveLink"),
     repoLink: g("repoLink"),
     additionalInfo: g("additionalInfo"),
@@ -94,29 +97,15 @@ async function submitInitiative(formData: FormData) {
     })
     .returning({ id: submissions.id });
 
-  const video = formData.get("demoVideo");
   const supporting = formData
     .getAll("files")
     .filter((f): f is File => f instanceof File && f.size > 0)
     .slice(0, MAX_FILES);
 
-  const uploads: { file: File; kind: "video" | "file" }[] = [];
-  if (video instanceof File && video.size > 0) {
-    if (!isVideo(video) || video.size > MAX_VIDEO_BYTES) {
-      throw new Error(
-        `Demo video must be mp4/mov/webm and under ${humanSize(MAX_VIDEO_BYTES)}.`,
-      );
-    }
-    uploads.push({ file: video, kind: "video" });
-  }
   for (const f of supporting) {
     if (f.size > MAX_FILE_BYTES) {
       throw new Error(`"${f.name}" exceeds the ${humanSize(MAX_FILE_BYTES)} file limit.`);
     }
-    uploads.push({ file: f, kind: "file" });
-  }
-
-  for (const { file: f, kind } of uploads) {
     const key = newKey(f.name);
     await putObject(
       key,
@@ -129,7 +118,7 @@ async function submitInitiative(formData: FormData) {
       contentType: f.type || "application/octet-stream",
       size: f.size,
       storageKey: key,
-      kind,
+      kind: "file",
     });
   }
 
@@ -176,11 +165,7 @@ export default async function SubmitPage() {
       <section className="hero">
         <div className="eyebrow">Share your idea or use case</div>
         <h1>AI Initiative Submission</h1>
-        <p>
-          The more concrete, the less back-and-forth later. Ideas at any stage are
-          welcome. A short demo video is strongly preferred — the evaluator sees
-          your full submission and every link and file you add.
-        </p>
+        <p>Any stage — early concept to fully scaled. A demo-video link is strongly preferred.</p>
       </section>
 
       <form action={submitInitiative} className="stack">
@@ -433,11 +418,7 @@ export default async function SubmitPage() {
           </div>
         </Section>
 
-        <Section
-          n={6}
-          title="Supporting evidence"
-          hint="The evaluator watches the demo and opens every file and link you add here."
-        >
+        <Section n={6} title="Supporting evidence">
           <Evidence />
           <div className="field" style={{ marginTop: 20 }}>
             <label className="flabel">

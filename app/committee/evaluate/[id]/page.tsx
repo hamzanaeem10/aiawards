@@ -6,9 +6,25 @@ import {
 } from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { signedDownloadUrl } from "@/lib/storage";
-import { TIERS } from "@/lib/rubric";
+import { CRITERIA } from "@/lib/rubric";
+import { videoEmbed } from "@/lib/videoEmbed";
+import DemoPlayer from "./DemoPlayer";
+import { GROQ_ENABLED } from "@/lib/ai/groq";
 import Scorecard from "./Scorecard";
+import RunAiButton from "./RunAiButton";
 import type { IntakeSummary } from "@/lib/ai/intake";
+import type { AiAssessment } from "@/lib/ai/assessment";
+
+// The supplementary AI assessment calls Groq synchronously from a server action.
+export const maxDuration = 60;
+
+const TIER_CLASS: Record<string, string> = {
+  award: "tier-award",
+  finalist: "tier-finalist",
+  hero: "tier-hero",
+  develop: "tier-develop",
+  noprogress: "tier-noprogress",
+};
 
 function isEmpty(v: unknown) {
   return v == null || v === "" || (Array.isArray(v) && !v.length);
@@ -41,13 +57,10 @@ function Meta({ label, value }: { label: string; value?: unknown }) {
 
 export default async function EvaluatePage({
   params,
-  searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ saved?: string }>;
 }) {
   const { id } = await params;
-  const { saved } = await searchParams;
   const s = await getSession();
   if (!s || (s.role !== "reviewer" && s.role !== "chair")) redirect("/login");
 
@@ -66,10 +79,11 @@ export default async function EvaluatePage({
       .filter((f) => f.kind === "file" || f.kind === "video")
       .map(async (f) => ({
         ...f,
-        href: await signedDownloadUrl(f.storageKey, f.filename),
+        // docs download; videos play inline
+        href: await signedDownloadUrl(f.storageKey, f.filename, f.kind !== "video"),
       })),
   );
-  const videos = withUrls.filter((f) => f.kind === "video");
+  const legacyVideos = withUrls.filter((f) => f.kind === "video");
   const docs = withUrls.filter((f) => f.kind !== "video");
 
   const [intake] = await db
@@ -80,6 +94,21 @@ export default async function EvaluatePage({
     )
     .orderBy(desc(aiInsights.createdAt));
   const ai = intake?.content as IntakeSummary | undefined;
+
+  const [assessRow] = await db
+    .select()
+    .from(aiInsights)
+    .where(
+      and(eq(aiInsights.submissionId, id), eq(aiInsights.type, "ai_assessment")),
+    )
+    .orderBy(desc(aiInsights.createdAt));
+  const aiScore = assessRow?.content as AiAssessment | undefined;
+  // The stored assessment is a snapshot — flag it if the model has changed since.
+  const currentKeys = new Set(CRITERIA.map((c) => c.key));
+  const aiScoreStale =
+    !!aiScore &&
+    (aiScore.perCriterion.length !== CRITERIA.length ||
+      aiScore.perCriterion.some((c) => !currentKeys.has(c.key as never)));
 
   const [mine] = await db
     .select()
@@ -93,15 +122,14 @@ export default async function EvaluatePage({
 
   const d = sub.data as Record<string, unknown>;
   const hasAi = !!(ai && (ai.overview || ai.clarifyingQuestions?.length));
-  const mineTier =
-    mine && TIERS.find((t) => t.key === mine.tier)?.label;
+  const demo = d.demoVideoUrl ? videoEmbed(String(d.demoVideoUrl)) : null;
 
   return (
     <div className="wrap eval-page stack">
       <div className="eval-title">
         <div>
           <Link href="/committee/queue" className="eval-back">
-            ← Evaluation queue
+            <span aria-hidden="true">←</span> Evaluation queue
           </Link>
           <div className="eyebrow">Evaluation &amp; scoring</div>
           <h1>{sub.initiativeName}</h1>
@@ -111,24 +139,14 @@ export default async function EvaluatePage({
         </div>
       </div>
 
-      {saved && mine && (
+      {mine && (
         <div className="eval-done">
-          <div>
-            <b>✓ Assessment recorded.</b>{" "}
-            <span className="muted">
-              {sub.initiativeName} is now {mineTier}. You can revise this below
-              until the cycle closes.
-            </span>
-          </div>
-          <Link href="/committee/queue" className="btn sm">
-            Back to queue →
-          </Link>
+          <b>You&apos;ve recorded an assessment</b> — editing below overwrites it.
         </div>
       )}
 
       <Scorecard
         submissionId={id}
-        done={!!saved && !!mine}
         initial={
           mine
             ? {
@@ -183,14 +201,99 @@ export default async function EvaluatePage({
           </details>
         )}
 
-        {(videos.length > 0 || !!d.liveLink || !!d.repoLink || docs.length > 0) && (
+        {(aiScore || GROQ_ENABLED) && (
+          <details className="ai-block ai-assess" open={!!aiScore}>
+            <summary className="tag">
+              ◆ AI assessment — supplementary, not the panel&apos;s decision
+            </summary>
+
+            {!aiScore ? (
+              <div className="ai-assess-empty">
+                <RunAiButton submissionId={id} label="Run AI assessment" />
+              </div>
+            ) : (
+              <>
+                {aiScoreStale && (
+                  <div className="notice n-amber" style={{ margin: "8px 0 10px" }}>
+                    Generated under a previous version of the Assessment Model —
+                    re-run for the current criteria and weights.
+                  </div>
+                )}
+                <p style={{ margin: "8px 0 10px" }}>{aiScore.summary}</p>
+
+                <div className="table-wrap" style={{ margin: "0 0 10px" }}>
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Criterion</th>
+                        <th style={{ width: 60 }}>AI /5</th>
+                        <th>Rationale</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {aiScore.perCriterion.map((c) => (
+                        <tr key={c.key}>
+                          <td>
+                            {c.label}{" "}
+                            <span className="muted">{c.weight}%</span>
+                          </td>
+                          <td>
+                            <b>{c.score}</b>
+                          </td>
+                          <td className="muted">{c.rationale}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <p style={{ margin: "0 0 10px" }}>
+                  <b>AI weighted total: {aiScore.weightedTotal.toFixed(1)} / 100</b>{" "}
+                  <span className={`tierbanner ${TIER_CLASS[aiScore.tierKey] ?? ""}`}>
+                    {aiScore.tierLabel}
+                  </span>{" "}
+                  <span className="muted">· confidence {aiScore.confidence}</span>
+                </p>
+
+                {!!aiScore.strengths?.length && (
+                  <>
+                    <p className="muted" style={{ fontWeight: 700, margin: "8px 0 0" }}>
+                      Strengths
+                    </p>
+                    <ul>
+                      {aiScore.strengths.map((x, i) => (
+                        <li key={i}>{x}</li>
+                      ))}
+                    </ul>
+                  </>
+                )}
+                {!!aiScore.risks?.length && (
+                  <>
+                    <p className="muted" style={{ fontWeight: 700, margin: "8px 0 0" }}>
+                      Risks &amp; gaps
+                    </p>
+                    <ul>
+                      {aiScore.risks.map((x, i) => (
+                        <li key={i}>{x}</li>
+                      ))}
+                    </ul>
+                  </>
+                )}
+              </>
+            )}
+          </details>
+        )}
+
+        {(demo || legacyVideos.length > 0 || !!d.liveLink || !!d.repoLink || docs.length > 0) && (
           <div className="card">
             <div className="section-head">
               <span className="n">▶</span>
               <h2>Demo, links &amp; files</h2>
             </div>
 
-            {videos.map((f) => (
+            {demo && <DemoPlayer demo={demo} />}
+
+            {legacyVideos.map((f) => (
               <div key={f.id} className="ev-uploaded" style={{ marginBottom: 14 }}>
                 {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
                 <video className="ev-video" src={f.href} controls preload="metadata" />
@@ -206,38 +309,44 @@ export default async function EvaluatePage({
               </div>
             ))}
 
-            {(!!d.liveLink || !!d.repoLink || docs.length > 0) && (
+            {(!!d.liveLink || !!d.repoLink) && (
               <ul className="attach">
                 {d.liveLink ? (
                   <li>
+                    <span className="attach-tag">Live link</span>
                     <a href={String(d.liveLink)} target="_blank" rel="noreferrer">
                       {String(d.liveLink)}
                     </a>
-                    <span className="muted">live link</span>
                   </li>
                 ) : null}
                 {d.repoLink ? (
                   <li>
+                    <span className="attach-tag">Repository</span>
                     <a href={String(d.repoLink)} target="_blank" rel="noreferrer">
                       {String(d.repoLink)}
                     </a>
-                    <span className="muted">repository</span>
                   </li>
                 ) : null}
-                {docs.map((f) => (
-                  <li key={f.id}>
-                    <a href={f.href} target="_blank" rel="noreferrer">
-                      {f.filename}
-                    </a>
-                    <span className="muted">{(f.size / 1024).toFixed(0)} KB</span>
-                  </li>
-                ))}
               </ul>
             )}
-            {withUrls.length > 0 && (
-              <p className="muted" style={{ marginTop: 8 }}>
-                Links are valid for 5 minutes — reload to refresh.
-              </p>
+
+            {docs.length > 0 && (
+              <div className="filelist">
+                {docs.map((f) => (
+                  <a key={f.id} className="filecard" href={f.href} download={f.filename}>
+                    <span className="filecard-ext">
+                      {(f.filename.split(".").pop() ?? "file").slice(0, 4).toUpperCase()}
+                    </span>
+                    <span className="filecard-name">{f.filename}</span>
+                    <span className="filecard-size">
+                      {f.size < 1024 * 1024
+                        ? `${Math.round(f.size / 1024)} KB`
+                        : `${(f.size / 1024 / 1024).toFixed(1)} MB`}
+                    </span>
+                    <span className="filecard-dl">Download ↓</span>
+                  </a>
+                ))}
+              </div>
             )}
           </div>
         )}

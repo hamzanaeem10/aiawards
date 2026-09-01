@@ -100,13 +100,6 @@ small, .muted { color: var(--ink-3); font-size: 0.82rem; line-height: 1.5; }
   color: var(--maroon);
   margin-bottom: 14px;
 }
-.eyebrow::before {
-  content: "";
-  width: 22px;
-  height: 1px;
-  background: currentColor;
-  opacity: 0.5;
-}
 .lede { font-size: 1.08rem; color: var(--ink-2); max-width: 60ch; line-height: 1.6; }
 
 /* ---------- header ---------- */

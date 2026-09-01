@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   const s = await getSession();
-  if (!s || (s.role !== "admin" && s.role !== "chair")) {
+  if (!s || s.role !== "admin") {
     return new Response("Forbidden", { status: 403 });
   }
 

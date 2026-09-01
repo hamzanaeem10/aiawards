@@ -24,7 +24,7 @@ Change the model by editing that one file.
 ## Scoring policy (important)
 
 **The score of record, the tier, and every lifecycle outcome are written only by a
-human** — a reviewer's or the panel chair's `recordAssessment` action
+human** — a reviewer's (or the admin's) `recordAssessment` action
 (`app/committee/evaluate/[id]/actions.ts`) is the single writer of the
 `evaluations` table and the only thing that advances a submission.
 
@@ -54,23 +54,31 @@ OneDrive link into an inline `<video>` on the evaluate screen (via the consumer
 file URLs are also handled best-effort, but OneDrive is what the form asks for.)
 Supporting files are stored in object storage and served with 5-minute signed URLs.
 
-## Roles
+## Roles & accounts
 
-`nominee` · `reviewer` · `chair` · `admin`. Nominees can also submit with no account.
+`nominee` · `reviewer` · `admin`. The admin manages everything and can also evaluate; reviewers only evaluate. Nominees submit with no account.
+
+- **`db:seed`** creates one **bootstrap admin** from `BOOTSTRAP_ADMIN_EMAIL` /
+  `BOOTSTRAP_ADMIN_PASSWORD` (falls back to `admin@jazzworld.test` / `password123`
+  for local dev).
+- Signed in as the admin, **`/admin/users`** creates **reviewer**
+  accounts — it generates a strong password and shows it once for you to send
+  the reviewer (Slack/WhatsApp/…). It can also reset a reviewer's password or
+  deactivate them (their recorded scores are kept).
+- More admins are provisioned by direct DB access — rare and
+  deliberate.
 
 ## Local dev
 
 ```bash
 cp .env.example .env          # DATABASE_URL, AUTH_SECRET, S3/AWS_*, GROQ_API_KEY (optional)
 npm install
-npm run db:migrate            # apply migrations to the database
-npm run db:seed               # test users, password: password123
+npm run db:migrate
+npm run db:seed               # bootstrap admin
 npm run dev                   # http://localhost:3000
 ```
 
 For a self-hosted Postgres + MinIO instead of Neon: `docker compose up -d db minio minio-init`.
-
-Seeded logins: `admin@ / chair@ / reviewer1@ / reviewer2@ / nominee@jazzworld.test`.
 
 > Don't run `npm run build` while `npm run dev` is running — they share `.next` and
 > it corrupts. Stop dev, `rm -rf .next`, then build.
@@ -81,7 +89,7 @@ Seeded logins: `admin@ / chair@ / reviewer1@ / reviewer2@ / nominee@jazzworld.te
    link / repo / files → stored in Postgres (+ object storage for files), status
    `SUBMITTED`.
 2. `/committee/queue` — every submission, paginated. Any signed-in evaluator
-   (`reviewer` / `chair`) opens one — no cap on how many review a submission.
+   (`reviewer` or `admin`) opens one — no cap on how many review a submission.
 3. `/committee/evaluate/[id]` — one screen: full submission + demo + attachments,
    an optional on-demand **Groq AI assessment** (supplementary), then the
    evaluator scores the criteria (live weighted total). **Record assessment**
@@ -90,7 +98,7 @@ Seeded logins: `admin@ / chair@ / reviewer1@ / reviewer2@ / nominee@jazzworld.te
 4. `/admin` — per submission: the cumulative panel score, the per-evaluator ×
    per-criterion matrix with a panel-average row, and each evaluator's notes.
    CSV export of submissions (with panel averages) and of evaluations.
-6. `/status/[id]` — nominee tracks the lifecycle status.
+5. `/status/[id]` — nominee tracks the lifecycle status.
 
 ## Scale & resilience (sized for ~3000 submissions / cycle)
 
@@ -137,11 +145,12 @@ files matter — set `NEXT_PUBLIC_MAX_FILE_MB=3`, `NEXT_PUBLIC_MAX_FILES=3`,
 
 Vercel env vars: `AUTH_SECRET`, `DATABASE_URL` (Neon pooled), `AWS_ACCESS_KEY_ID`,
 `AWS_SECRET_ACCESS_KEY`, `AWS_ENDPOINT_URL_S3`, `AWS_REGION`, `S3_BUCKET=attachments`,
-`GROQ_API_KEY` + `GROQ_MODEL` (for the supplementary AI assessment — omit to hide
-it), and the three upload overrides. Then sign in at `/login`
-(`admin@jazzworld.test` / `password123`).
+`BOOTSTRAP_ADMIN_EMAIL` + `BOOTSTRAP_ADMIN_PASSWORD`, `GROQ_API_KEY` +
+`GROQ_MODEL` (omit to hide the AI-assessment button), and the three upload
+overrides. Deploy, run `db:migrate` + `db:seed` against the DB, then sign in as
+the bootstrap admin and add reviewers at `/admin/users`.
 
 ## Not built yet (next)
 
-Email notifications · SSO · award-cycle/month management · per-IP rate limiting
-on `/submit`.
+Email notifications · SSO · reviewer self-serve password change · award-cycle /
+month management · per-IP rate limiting on `/submit`.

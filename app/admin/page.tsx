@@ -32,7 +32,7 @@ export default async function AdminPage({
   searchParams: Promise<{ page?: string }>;
 }) {
   const s = await getSession();
-  if (!s || (s.role !== "admin" && s.role !== "chair")) redirect("/login");
+  if (!s || s.role !== "admin") redirect("/login");
 
   const { page: pageRaw } = await searchParams;
   const page = Math.max(0, Number(pageRaw) - 1 || 0);

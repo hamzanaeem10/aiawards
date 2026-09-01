@@ -1,8 +1,17 @@
+import { randomInt } from "crypto";
 import { cookies } from "next/headers";
 import { SignJWT, jwtVerify } from "jose";
 import bcrypt from "bcryptjs";
 import { eq } from "drizzle-orm";
 import { db, users } from "./db";
+
+/** A readable 14-char password: no ambiguous chars (0/O, 1/l/I). */
+export function generatePassword(len = 14): string {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
+  let out = "";
+  for (let i = 0; i < len; i++) out += chars[randomInt(chars.length)];
+  return out;
+}
 
 const secret = new TextEncoder().encode(
   process.env.AUTH_SECRET || "dev-insecure-secret-change-me",
@@ -17,7 +26,7 @@ export async function hashPassword(pw: string) {
 
 export async function verifyLogin(email: string, password: string) {
   const [u] = await db.select().from(users).where(eq(users.email, email.toLowerCase()));
-  if (!u) return null;
+  if (!u || !u.active) return null;
   if (!(await bcrypt.compare(password, u.passwordHash))) return null;
   return u;
 }

@@ -1,48 +1,42 @@
-# Self-hosted stack for the AI Impact Awards portal.
-# Single VM: 4 vCPU / 8 GB RAM / 40 GB system disk + a ~500 GB volume for MinIO.
+# Self-hosted stack — app + Postgres (+ optional MinIO) on one VM.
+# 2 vCPU / 4 GB RAM / 40 GB disk is enough: demo videos are links, so object
+# storage only holds small supporting files.
+#
+#   docker compose up -d --build          # start db (+ minio) + app
+#   docker compose run --rm migrate       # apply migrations, then seed the bootstrap admin
+#
+# Using Cloudflare R2 / S3 / Neon for storage instead of MinIO? Delete the
+# `minio` + `minio-init` services and set the S3_* / AWS_* vars in .env.
 services:
   db:
     image: postgres:16-alpine
+    restart: unless-stopped
     environment:
       POSTGRES_USER: awards
-      POSTGRES_PASSWORD: awards
+      POSTGRES_PASSWORD: awards   # change this AND DATABASE_URL below
       POSTGRES_DB: awards
     command:
       - "postgres"
       - "-c"
-      - "shared_buffers=1GB"
-      - "-c"
-      - "work_mem=32MB"
+      - "shared_buffers=512MB"
       - "-c"
       - "max_connections=100"
-    ports: ["5432:5432"]
     volumes: ["pgdata:/var/lib/postgresql/data"]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U awards"]
       interval: 5s
       timeout: 3s
       retries: 10
-    deploy:
-      resources:
-        limits: { memory: 2500M }
 
   minio:
     image: minio/minio:latest
+    restart: unless-stopped
     command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: minioadmin
       MINIO_ROOT_PASSWORD: minioadmin
-    ports: ["9000:9000", "9001:9001"]
-    # Bind this to the dedicated data volume on the VM, e.g. /mnt/minio-data:/data
+    ports: ["9001:9001"]     # console only; the S3 API is reached via the proxy
     volumes: ["miniodata:/data"]
-    healthcheck:
-      test: ["CMD-SHELL", "mc ready local || exit 1"]
-      interval: 15s
-      timeout: 5s
-      retries: 5
-    deploy:
-      resources:
-        limits: { memory: 1G }
 
   # one-shot: creates the attachments bucket
   minio-init:
@@ -55,31 +49,33 @@ services:
 
   app:
     build: { context: ., target: runner }
+    restart: unless-stopped
     depends_on:
       db: { condition: service_healthy }
     env_file: .env
-    # This self-hosted path uses the bundled Postgres + MinIO, overriding whatever
-    # DATABASE_URL / storage vars are in .env (which may point at Neon).
+    # Bundled Postgres + MinIO. If S3_ENDPOINT points at MinIO it must be the
+    # PUBLIC url the browser can reach (e.g. https://files.yourdomain.com), not
+    # http://minio:9000 — presigned download URLs are handed to the browser.
     environment:
       DATABASE_URL: postgres://awards:awards@db:5432/awards
-      S3_ENDPOINT: http://minio:9000
-      S3_REGION: us-east-1
-      S3_BUCKET: attachments
-      S3_ACCESS_KEY_ID: minioadmin
-      S3_SECRET_ACCESS_KEY: minioadmin
-      AWS_ENDPOINT_URL_S3: ""
-      AWS_ACCESS_KEY_ID: ""
-      AWS_SECRET_ACCESS_KEY: ""
       NODE_OPTIONS: "--max-old-space-size=1024"
-    ports: ["3000:3000"]
+    ports: ["127.0.0.1:3000:3000"]   # only the reverse proxy talks to it
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/health || exit 1"]
       interval: 20s
       timeout: 5s
       retries: 5
-    deploy:
-      resources:
-        limits: { memory: 2G }
+
+  # one-shot: `docker compose run --rm migrate`  (build target has tsx + source)
+  migrate:
+    build: { context: ., target: build }
+    profiles: ["tools"]
+    depends_on:
+      db: { condition: service_healthy }
+    env_file: .env
+    environment:
+      DATABASE_URL: postgres://awards:awards@db:5432/awards
+    command: sh -c "npm run db:migrate && npm run db:seed"
 
 volumes:
   pgdata:

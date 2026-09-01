@@ -61,7 +61,7 @@ export default async function EvaluatePage({
 }) {
   const { id } = await params;
   const s = await getSession();
-  if (!s || (s.role !== "reviewer" && s.role !== "chair")) redirect("/login");
+  if (!s || (s.role !== "reviewer" && s.role !== "admin")) redirect("/login");
 
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
     notFound();

@@ -24,7 +24,7 @@ import { generateAiAssessment } from "@/lib/ai/assessment";
  */
 export async function runAiAssessment(submissionId: string) {
   const s = await getSession();
-  if (!s || (s.role !== "reviewer" && s.role !== "chair")) {
+  if (!s || (s.role !== "reviewer" && s.role !== "admin")) {
     throw new Error("UNAUTHORIZED");
   }
   const [sub] = await db
@@ -60,7 +60,7 @@ export async function runAiAssessment(submissionId: string) {
 
 export async function recordAssessment(submissionId: string, formData: FormData) {
   const s = await getSession();
-  if (!s || (s.role !== "reviewer" && s.role !== "chair")) throw new Error("UNAUTHORIZED");
+  if (!s || (s.role !== "reviewer" && s.role !== "admin")) throw new Error("UNAUTHORIZED");
 
   // --- scores: ONLY from this human evaluator's form input --------------
   const scores: Record<string, number> = {};

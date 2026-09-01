@@ -33,7 +33,7 @@ export default async function QueuePage({
   searchParams: Promise<{ page?: string; recorded?: string }>;
 }) {
   const s = await getSession();
-  if (!s || (s.role !== "reviewer" && s.role !== "chair")) redirect("/login");
+  if (!s || (s.role !== "reviewer" && s.role !== "admin")) redirect("/login");
 
   const { page: pageRaw, recorded } = await searchParams;
   const page = Math.max(0, Number(pageRaw) - 1 || 0);

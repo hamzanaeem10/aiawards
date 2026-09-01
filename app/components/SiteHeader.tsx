@@ -32,15 +32,24 @@ export function SiteHeader({
             </span>
           </Link>
           <nav className="nav">
-            {(session.role === "reviewer" || session.role === "chair") && (
-              <Link href="/committee/queue" className={is("/committee") ? "active" : ""}>
-                Evaluate
-              </Link>
-            )}
-            {(session.role === "admin" || session.role === "chair") && (
-              <Link href="/admin" className={is("/admin") ? "active" : ""}>
-                Admin
-              </Link>
+            <Link href="/committee/queue" className={is("/committee") ? "active" : ""}>
+              Evaluate
+            </Link>
+            {session.role === "admin" && (
+              <>
+                <Link
+                  href="/admin"
+                  className={is("/admin") && !is("/admin/users") ? "active" : ""}
+                >
+                  Admin
+                </Link>
+                <Link
+                  href="/admin/users"
+                  className={is("/admin/users") ? "active" : ""}
+                >
+                  Evaluators
+                </Link>
+              </>
             )}
             <form action={logout}>
               <button type="submit">Sign out</button>

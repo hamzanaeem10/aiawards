@@ -5,17 +5,22 @@ import {
   timestamp,
   integer,
   jsonb,
+  boolean,
   index,
 } from "drizzle-orm/pg-core";
 
 // ---- Users & roles -------------------------------------------------------
-// role: 'nominee' | 'reviewer' | 'chair' | 'admin'
+// role: 'nominee' | 'reviewer' | 'admin'
+// The admin manages everything and can also evaluate; reviewers only evaluate.
+// The admin is created by db:seed; reviewers are added from /admin/users.
 export const users = pgTable("users", {
   id: uuid("id").defaultRandom().primaryKey(),
   email: text("email").notNull().unique(),
   name: text("name").notNull(),
   passwordHash: text("password_hash").notNull(),
   role: text("role").notNull().default("nominee"),
+  active: boolean("active").notNull().default(true),
+  createdByUserId: uuid("created_by_user_id"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

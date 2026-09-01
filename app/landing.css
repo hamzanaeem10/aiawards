@@ -37,15 +37,22 @@
   gap: 13px;
 }
 .lp-logo .mark {
-  width: 40px;
-  height: 40px;
+  width: 50px;
+  height: 50px;
   flex: none;
-}
-.lp-logo .mark img {
-  display: block;
-  width: 40px;
-  height: 40px;
+  position: relative;
+  overflow: hidden;
   border-radius: 50%;
+}
+/* The source PNG is the circular monogram plus a "JAZZWORLD" wordmark beneath;
+   crop to just the circle. */
+.lp-logo .mark img {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 78px;
+  height: auto;
+  transform: translate(-50%, -50%) translateY(7px);
 }
 .lp-logo-txt {
   display: flex;
@@ -54,7 +61,7 @@
 }
 .lp-logo-txt b {
   font-family: var(--font-display, Georgia, serif);
-  font-size: 1.06rem;
+  font-size: 1.16rem;
   font-weight: 600;
   letter-spacing: 0.01em;
 }

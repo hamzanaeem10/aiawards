@@ -90,8 +90,9 @@ export const statusHistory = pgTable("status_history", {
   bySubmission: index("status_history_submission_idx").on(t.submissionId),
 }));
 
-// ---- AI insights: ADVISORY ONLY. Never scores. Always labeled + editable.
-// type: 'intake_summary' (Claude, on submit) | 'ai_assessment' (Groq, on demand)
+// ---- AI insights: SUPPLEMENTARY only. Never written to `evaluations` or the
+// lifecycle; the human panel's score is always the score of record.
+// type: 'ai_assessment' — the on-demand Groq assessment shown on the evaluate screen
 export const aiInsights = pgTable("ai_insights", {
   id: uuid("id").defaultRandom().primaryKey(),
   submissionId: uuid("submission_id")

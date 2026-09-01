@@ -1,5 +1,5 @@
 // Groq (OpenAI-compatible) — used only for the SUPPLEMENTARY AI assessment on the
-// evaluate screen. Separate from the Anthropic advisory features / AI_DISABLED.
+// evaluate screen. It never writes to `evaluations` or the lifecycle.
 
 export const GROQ_MODEL = process.env.GROQ_MODEL || "openai/gpt-oss-120b";
 export const GROQ_ENABLED = !!process.env.GROQ_API_KEY;

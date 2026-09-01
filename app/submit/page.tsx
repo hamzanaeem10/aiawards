@@ -3,7 +3,6 @@ import { and, eq, gt } from "drizzle-orm";
 import { db, submissions, attachments, statusHistory, auditLog } from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { newKey, putObject } from "@/lib/storage";
-import { enqueue, QUEUES } from "@/lib/queue";
 import { MAX_FILE_BYTES, MAX_FILES, humanSize } from "@/lib/uploads";
 import Evidence from "./Evidence";
 import SubmitButton from "./SubmitButton";
@@ -130,8 +129,6 @@ async function submitInitiative(formData: FormData) {
     action: "submission.create",
     target: row.id,
   });
-
-  await enqueue(QUEUES.intake, { submissionId: row.id });
 
   redirect(`/status/${row.id}`);
 }

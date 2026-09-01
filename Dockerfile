@@ -20,10 +20,3 @@ COPY --from=build /app/.next/static ./.next/static
 COPY --from=build /app/public ./public
 EXPOSE 3000
 CMD ["node", "server.js"]
-
-# ---- worker (same image, different entrypoint) ----
-FROM node:22-alpine AS worker
-WORKDIR /app
-COPY --from=deps /app/node_modules ./node_modules
-COPY . .
-CMD ["npx", "tsx", "worker/index.ts"]

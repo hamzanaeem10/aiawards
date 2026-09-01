@@ -12,7 +12,6 @@ import DemoPlayer from "./DemoPlayer";
 import { GROQ_ENABLED } from "@/lib/ai/groq";
 import Scorecard from "./Scorecard";
 import RunAiButton from "./RunAiButton";
-import type { IntakeSummary } from "@/lib/ai/intake";
 import type { AiAssessment } from "@/lib/ai/assessment";
 
 // The supplementary AI assessment calls Groq synchronously from a server action.
@@ -86,15 +85,6 @@ export default async function EvaluatePage({
   const legacyVideos = withUrls.filter((f) => f.kind === "video");
   const docs = withUrls.filter((f) => f.kind !== "video");
 
-  const [intake] = await db
-    .select()
-    .from(aiInsights)
-    .where(
-      and(eq(aiInsights.submissionId, id), eq(aiInsights.type, "intake_summary")),
-    )
-    .orderBy(desc(aiInsights.createdAt));
-  const ai = intake?.content as IntakeSummary | undefined;
-
   const [assessRow] = await db
     .select()
     .from(aiInsights)
@@ -121,7 +111,6 @@ export default async function EvaluatePage({
     );
 
   const d = sub.data as Record<string, unknown>;
-  const hasAi = !!(ai && (ai.overview || ai.clarifyingQuestions?.length));
   const demo = d.demoVideoUrl ? videoEmbed(String(d.demoVideoUrl)) : null;
 
   return (
@@ -158,49 +147,6 @@ export default async function EvaluatePage({
             : undefined
         }
       >
-        {hasAi && (
-          <details className="ai-block" open>
-            <summary className="tag">
-              ● AI orientation — advisory only, verify against the submission
-            </summary>
-            {ai!.overview && <p style={{ margin: "8px 0 0" }}>{ai!.overview}</p>}
-            {ai!.themeSuggestion && (
-              <p className="muted" style={{ margin: "6px 0 0" }}>
-                Theme read: {ai!.themeSuggestion}
-              </p>
-            )}
-            {!!ai!.reportedMetrics?.length && (
-              <p className="muted" style={{ margin: "4px 0 0" }}>
-                Reported (unverified): {ai!.reportedMetrics.join("; ")}
-              </p>
-            )}
-            {!!ai!.clarifyingQuestions?.length && (
-              <>
-                <p className="muted" style={{ fontWeight: 700, margin: "10px 0 0" }}>
-                  Questions to consider asking
-                </p>
-                <ul>
-                  {ai!.clarifyingQuestions.map((q, i) => (
-                    <li key={i}>{q}</li>
-                  ))}
-                </ul>
-              </>
-            )}
-            {!!ai!.completenessFlags?.length && (
-              <>
-                <p className="muted" style={{ fontWeight: 700, margin: "10px 0 0" }}>
-                  Completeness flags
-                </p>
-                <ul>
-                  {ai!.completenessFlags.map((q, i) => (
-                    <li key={i}>{q}</li>
-                  ))}
-                </ul>
-              </>
-            )}
-          </details>
-        )}
-
         {(aiScore || GROQ_ENABLED) && (
           <details className="ai-block ai-assess" open={!!aiScore}>
             <summary className="tag">

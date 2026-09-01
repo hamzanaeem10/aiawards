@@ -43,8 +43,8 @@ export default function Home() {
               JazzWorld <span className="lp-accent">AI Impact</span> Awards
             </h1>
             <p>
-              Put forward an AI-led initiative you&apos;ve built or piloted — at any
-              stage, from early concept to fully scaled.
+              Put forward an AI-led initiative you&apos;ve built or piloted, at
+              any stage, from early concept to fully scaled.
             </p>
             <Link className="lp-cta" href="/submit">
               Submit an initiative <span>→</span>

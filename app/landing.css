@@ -91,12 +91,6 @@
   color: rgba(255, 255, 255, 0.72);
   margin-bottom: clamp(14px, 2.4vh, 22px);
 }
-.lp-eyebrow::before {
-  content: "";
-  width: 26px;
-  height: 1.5px;
-  background: rgba(255, 255, 255, 0.6);
-}
 .lp-hero h1 {
   font-family: var(--font-sans, system-ui, sans-serif);
   font-weight: 800;

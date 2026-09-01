@@ -1,19 +1,13 @@
 import { drizzle } from "drizzle-orm/node-postgres";
-import { Pool } from "pg";
+import type { Pool } from "pg";
+import { makePool } from "./pool";
 import * as schema from "./schema";
 
 const globalForDb = globalThis as unknown as { pool?: Pool };
 
-// Cache the pool on the global in every environment — on serverless (Vercel) a
-// warm function reuses it; set DB_POOL_MAX=1 there to stay within connection caps
-// (or point DATABASE_URL at a pooled endpoint like Neon's -pooler host).
-const pool =
-  globalForDb.pool ??
-  new Pool({
-    connectionString: process.env.DATABASE_URL,
-    max: Number(process.env.DB_POOL_MAX) || 10,
-  });
-
+// Cache the pool on the global — a warm serverless function (Vercel) reuses it.
+// Set DB_POOL_MAX=1 there, or point DATABASE_URL at Neon's -pooler host.
+const pool = globalForDb.pool ?? makePool();
 globalForDb.pool = pool;
 
 export const db = drizzle(pool, { schema });

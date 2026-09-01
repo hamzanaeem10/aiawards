@@ -17,6 +17,8 @@ import {
 } from "@/lib/rubric";
 import { generateAiAssessment } from "@/lib/ai/assessment";
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 /**
  * Supplementary AI assessment. Writes ONLY to ai_insights — it never touches the
  * evaluations table, the lifecycle, or a decision. The human panel's score
@@ -27,6 +29,7 @@ export async function runAiAssessment(submissionId: string) {
   if (!s || (s.role !== "reviewer" && s.role !== "admin")) {
     throw new Error("UNAUTHORIZED");
   }
+  if (!UUID.test(submissionId)) throw new Error("NOT_FOUND");
   const [sub] = await db
     .select()
     .from(submissions)
@@ -61,6 +64,7 @@ export async function runAiAssessment(submissionId: string) {
 export async function recordAssessment(submissionId: string, formData: FormData) {
   const s = await getSession();
   if (!s || (s.role !== "reviewer" && s.role !== "admin")) throw new Error("UNAUTHORIZED");
+  if (!UUID.test(submissionId)) throw new Error("NOT_FOUND");
 
   // --- scores: ONLY from this human evaluator's form input --------------
   const scores: Record<string, number> = {};
@@ -131,7 +135,8 @@ export async function recordAssessment(submissionId: string, formData: FormData)
       submissionId,
       from: sub.status,
       to: newStatus,
-      note: `Panel average ${avg.toFixed(1)}/100 across ${all.length} assessment${all.length === 1 ? "" : "s"} → ${avgTier.label}. ${nextStepText(avgTier.key)}`,
+      // Nominee-visible on /status — no raw scores here; the numbers live on /admin.
+      note: `Moved to ${avgTier.label} on the panel's assessment.`,
       byUserId: s.userId,
     });
   }

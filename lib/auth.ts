@@ -61,12 +61,23 @@ export async function getSession(): Promise<Session | null> {
   if (!token) return null;
   try {
     const { payload } = await jwtVerify(token, secret);
-    return {
-      userId: String(payload.sub),
-      role: String(payload.role),
-      name: String(payload.name),
-      email: String(payload.email),
-    };
+    const userId = String(payload.sub);
+
+    // Re-check the account against the DB on every request, so a deactivated or
+    // demoted user loses access immediately — not whenever their 7-day token
+    // happens to expire. (One primary-key lookup.)
+    const [u] = await db
+      .select({
+        role: users.role,
+        name: users.name,
+        email: users.email,
+        active: users.active,
+      })
+      .from(users)
+      .where(eq(users.id, userId));
+    if (!u || !u.active) return null;
+
+    return { userId, role: u.role, name: u.name, email: u.email };
   } catch {
     return null;
   }

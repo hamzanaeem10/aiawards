@@ -1,8 +1,8 @@
 import "dotenv/config";
-import { Pool } from "pg";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { eq } from "drizzle-orm";
 import bcrypt from "bcryptjs";
+import { makePool } from "./pool";
 import * as schema from "./schema";
 
 // Creates ONE bootstrap admin. Everyone else (reviewers, more admins/chairs) is
@@ -11,7 +11,7 @@ import * as schema from "./schema";
 //   BOOTSTRAP_ADMIN_NAME                              — optional
 // Local dev fallback: admin@jazzworld.test / password123
 async function main() {
-  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+  const pool = makePool();
   const db = drizzle(pool, { schema });
 
   const email = (process.env.BOOTSTRAP_ADMIN_EMAIL || "admin@jazzworld.test")

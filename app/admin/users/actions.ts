@@ -7,6 +7,8 @@ import { requireRole, hashPassword, generatePassword } from "@/lib/auth";
 
 type Result = { ok: boolean; password?: string; error?: string };
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 /** Admins create REVIEWER accounts only. */
 export async function createReviewer(input: {
   name: string;
@@ -48,6 +50,7 @@ export async function createReviewer(input: {
 
 export async function resetReviewerPassword(userId: string): Promise<Result> {
   const s = await requireRole("admin");
+  if (!UUID.test(userId)) return { ok: false, error: "Not a reviewer account." };
   const [u] = await db.select().from(users).where(eq(users.id, userId));
   if (!u || u.role !== "reviewer") {
     return { ok: false, error: "Not a reviewer account." };
@@ -69,6 +72,7 @@ export async function resetReviewerPassword(userId: string): Promise<Result> {
 
 export async function setReviewerActive(userId: string, active: boolean) {
   const s = await requireRole("admin");
+  if (!UUID.test(userId)) return;
   const [u] = await db.select().from(users).where(eq(users.id, userId));
   if (!u || u.role !== "reviewer") return;
   await db.update(users).set({ active }).where(eq(users.id, userId));

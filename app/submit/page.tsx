@@ -162,7 +162,6 @@ export default async function SubmitPage() {
       <section className="hero">
         <div className="eyebrow">Share your idea or use case</div>
         <h1>AI Initiative Submission</h1>
-        <p>Any stage, from early concept to fully scaled. A demo-video link is strongly preferred.</p>
       </section>
 
       <form action={submitInitiative} className="stack">

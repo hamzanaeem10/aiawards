@@ -79,8 +79,8 @@
   position: relative;
   flex: 1;
   display: flex;
-  align-items: flex-end;
-  padding: clamp(16px, 3vh, 40px) 0 clamp(6px, 1.5vh, 16px);
+  align-items: center;
+  padding: clamp(20px, 4vh, 56px) 0;
 }
 .lp-hero-body {
   position: relative;
@@ -99,17 +99,17 @@
   margin-bottom: clamp(14px, 2.4vh, 22px);
 }
 .lp-hero h1 {
-  font-family: var(--font-display, Georgia, serif);
-  font-optical-sizing: auto;
-  font-weight: 600;
-  font-size: clamp(2.3rem, 1.5rem + 3vw, 3.9rem);
-  line-height: 1.04;
-  letter-spacing: -0.015em;
+  font-family: var(--font-sans, system-ui, sans-serif);
+  font-weight: 800;
+  font-size: clamp(2.2rem, 1.5rem + 2.8vw, 3.7rem);
+  line-height: 1.05;
+  letter-spacing: -0.022em;
   margin: 0 0 clamp(14px, 2.4vh, 22px);
   color: #fff;
 }
 .lp-accent {
   white-space: nowrap;
+  font-family: var(--font-display, Georgia, serif);
   font-style: italic;
   font-weight: 400;
   color: #ffdcea;

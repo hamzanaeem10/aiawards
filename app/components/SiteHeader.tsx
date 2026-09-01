@@ -16,6 +16,9 @@ export function SiteHeader({
   const path = usePathname();
   const is = (p: string) => path === p || path.startsWith(p + "/");
 
+  // The landing page is a full-bleed page with no site chrome of its own.
+  if (path === "/") return null;
+
   // The staff area: sign-in, the evaluation queue, and admin.
   const staffArea = is("/login") || is("/committee") || is("/admin");
 

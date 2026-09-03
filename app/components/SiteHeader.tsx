@@ -16,8 +16,9 @@ export function SiteHeader({
   const path = usePathname();
   const is = (p: string) => path === p || path.startsWith(p + "/");
 
-  // The landing page is a full-bleed page with no site chrome of its own.
-  if (path === "/") return null;
+  // Full-bleed pages that carry their own brand mark: the landing page, and
+  // the split-screen sign-in.
+  if (path === "/" || path === "/login") return null;
 
   // The staff area: sign-in, the evaluation queue, and admin.
   const staffArea = is("/login") || is("/committee") || is("/admin");

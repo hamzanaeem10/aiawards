@@ -1,5 +1,7 @@
 import { redirect } from "next/navigation";
 import { verifyLogin, createSession, getSession } from "@/lib/auth";
+import { Logo } from "../components/Logo";
+import AwardMark from "./AwardMark";
 
 async function login(formData: FormData) {
   "use server";
@@ -25,26 +27,66 @@ export default async function LoginPage({
   const existing = await getSession();
   if (existing) redirect(existing.role === "admin" ? "/admin" : "/committee/queue");
   const { e } = await searchParams;
+
   return (
-    <div className="wrap narrow stack">
-      <div>
-        <div className="eyebrow">Awards panel &amp; administration</div>
-        <h1>Sign in</h1>
+    <div className="auth">
+      <a href="/" className="logo auth-brand">
+        <Logo />
+        <span className="lock">
+          <b>JazzWorld</b>
+          <span>AI Impact Awards</span>
+        </span>
+      </a>
+
+      <div className="auth-form">
+        <div className="auth-inner">
+          <h1>Sign in</h1>
+
+          {e && (
+            <div className="notice n-danger" role="alert">
+              That email and password don&apos;t match an account.
+            </div>
+          )}
+
+          <form action={login} className="auth-fields">
+            <div className="field">
+              <label className="flabel" htmlFor="email">
+                Email
+              </label>
+              <input id="email" type="email" name="email" required autoFocus autoComplete="email" />
+            </div>
+            <div className="field">
+              <label className="flabel" htmlFor="password">
+                Password
+              </label>
+              <input
+                id="password"
+                type="password"
+                name="password"
+                required
+                autoComplete="current-password"
+              />
+            </div>
+            <button className="btn auth-submit" type="submit">
+              Sign in
+            </button>
+          </form>
+
+          <p className="auth-foot">
+            Evaluators and administrators only. An administrator can issue you a
+            new password.
+          </p>
+        </div>
       </div>
-      {e && <div className="notice n-danger">Incorrect email or password.</div>}
-      <form action={login} className="card pad-lg">
-        <div className="field">
-          <label className="flabel">Email</label>
-          <input type="email" name="email" required autoFocus />
+
+      <aside className="auth-panel">
+        <div className="auth-panel-inner">
+          <AwardMark />
+          <p className="auth-panel-line">
+            Recognising the work that moves us forward.
+          </p>
         </div>
-        <div className="field">
-          <label className="flabel">Password</label>
-          <input type="password" name="password" required />
-        </div>
-        <button className="btn" style={{ width: "100%", justifyContent: "center" }}>
-          Sign in
-        </button>
-      </form>
+      </aside>
     </div>
   );
 }

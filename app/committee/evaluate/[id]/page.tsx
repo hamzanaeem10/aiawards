@@ -111,7 +111,7 @@ export default async function EvaluatePage({
   const demo = d.demoVideoUrl ? videoEmbed(String(d.demoVideoUrl)) : null;
 
   const recordedOn = mine
-    ? new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric" })
+    ? new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "long", year: "numeric" })
         .format(mine.submittedAt)
     : null;
   const myTier = mine ? TIERS.find((t) => t.key === mine.tier) : null;
@@ -145,11 +145,19 @@ export default async function EvaluatePage({
 
       {mine && (
         <div className="eval-done">
-          <span className="eval-done-num">{(mine.weightedTotal / 10).toFixed(1)}</span>
-          <span className="eval-done-txt">
-            <b>You scored this {myTier?.label ?? mine.tier}</b> on {recordedOn}. Reopening
-            the assessment replaces what you recorded.
-          </span>
+          <p className="eval-done-score">
+            <b>{(mine.weightedTotal / 10).toFixed(1)}</b>
+            <span>/ 100</span>
+          </p>
+          <div className="eval-done-body">
+            <div className="eval-done-k">Your assessment</div>
+            <div className="eval-done-v">
+              <span className={`tierbanner ${TIER_CLASS[mine.tier] ?? ""}`}>
+                {myTier?.label ?? mine.tier}
+              </span>
+              <span className="eval-done-date">Recorded {recordedOn}</span>
+            </div>
+          </div>
         </div>
       )}
 

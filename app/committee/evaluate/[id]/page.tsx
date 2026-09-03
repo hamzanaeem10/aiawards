@@ -5,8 +5,7 @@ import {
   db, submissions, attachments, evaluations, aiInsights,
 } from "@/lib/db";
 import { getSession } from "@/lib/auth";
-import { signedDownloadUrl } from "@/lib/storage";
-import { CRITERIA } from "@/lib/rubric";
+import { CRITERIA, TIERS } from "@/lib/rubric";
 import { videoEmbed } from "@/lib/videoEmbed";
 import DemoPlayer from "./DemoPlayer";
 import { GROQ_ENABLED } from "@/lib/ai/groq";
@@ -73,15 +72,13 @@ export default async function EvaluatePage({
     .select()
     .from(attachments)
     .where(eq(attachments.submissionId, id));
-  const withUrls = await Promise.all(
-    files
-      .filter((f) => f.kind === "file" || f.kind === "video")
-      .map(async (f) => ({
-        ...f,
-        // docs download; videos play inline
-        href: await signedDownloadUrl(f.storageKey, f.filename, f.kind !== "video"),
-      })),
-  );
+  const withUrls = files
+    .filter((f) => f.kind === "file" || f.kind === "video")
+    .map((f) => ({
+      ...f,
+      // Streamed through /api/files (authed); docs download, videos play inline.
+      href: `/api/files/${f.id}${f.kind === "video" ? "" : "?dl=1"}`,
+    }));
   const legacyVideos = withUrls.filter((f) => f.kind === "video");
   const docs = withUrls.filter((f) => f.kind !== "video");
 
@@ -113,8 +110,26 @@ export default async function EvaluatePage({
   const d = sub.data as Record<string, unknown>;
   const demo = d.demoVideoUrl ? videoEmbed(String(d.demoVideoUrl)) : null;
 
+  const recordedOn = mine
+    ? new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric" })
+        .format(mine.submittedAt)
+    : null;
+  const myTier = mine ? TIERS.find((t) => t.key === mine.tier) : null;
+
   return (
-    <div className="wrap eval-page stack">
+    <Scorecard
+      submissionId={id}
+      initial={
+        mine
+          ? {
+              scores: mine.scores,
+              rationale: mine.rationale,
+              recommendation: mine.recommendation,
+              additionalValidation: mine.additionalValidation ?? "None",
+            }
+          : undefined
+      }
+    >
       <div className="eval-title">
         <div>
           <Link href="/committee/queue" className="eval-back">
@@ -130,105 +145,13 @@ export default async function EvaluatePage({
 
       {mine && (
         <div className="eval-done">
-          <b>You&apos;ve recorded an assessment</b> — editing below overwrites it.
+          <span className="eval-done-num">{(mine.weightedTotal / 10).toFixed(1)}</span>
+          <span className="eval-done-txt">
+            <b>You scored this {myTier?.label ?? mine.tier}</b> on {recordedOn}. Reopening
+            the assessment replaces what you recorded.
+          </span>
         </div>
       )}
-
-      <Scorecard
-        submissionId={id}
-        initial={
-          mine
-            ? {
-                scores: mine.scores,
-                rationale: mine.rationale,
-                recommendation: mine.recommendation,
-                additionalValidation: mine.additionalValidation ?? "None",
-              }
-            : undefined
-        }
-      >
-        {(aiScore || GROQ_ENABLED) && (
-          <details className="ai-block ai-assess" open={!!aiScore}>
-            <summary className="tag">
-              ◆ AI assessment — supplementary, not the panel&apos;s decision
-            </summary>
-
-            {!aiScore ? (
-              <div className="ai-assess-empty">
-                <RunAiButton submissionId={id} label="Run AI assessment" />
-              </div>
-            ) : (
-              <>
-                {aiScoreStale && (
-                  <div className="notice n-amber" style={{ margin: "8px 0 10px" }}>
-                    Generated under a previous version of the Assessment Model —
-                    re-run for the current criteria and weights.
-                  </div>
-                )}
-                <p style={{ margin: "8px 0 10px" }}>{aiScore.summary}</p>
-
-                <div className="table-wrap" style={{ margin: "0 0 10px" }}>
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Criterion</th>
-                        <th style={{ width: 60 }}>AI /5</th>
-                        <th>Rationale</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {aiScore.perCriterion.map((c) => (
-                        <tr key={c.key}>
-                          <td>
-                            {c.label}{" "}
-                            <span className="muted">{c.weight}%</span>
-                          </td>
-                          <td>
-                            <b>{c.score}</b>
-                          </td>
-                          <td className="muted">{c.rationale}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-
-                <p style={{ margin: "0 0 10px" }}>
-                  <b>AI weighted total: {aiScore.weightedTotal.toFixed(1)} / 100</b>{" "}
-                  <span className={`tierbanner ${TIER_CLASS[aiScore.tierKey] ?? ""}`}>
-                    {aiScore.tierLabel}
-                  </span>{" "}
-                  <span className="muted">· confidence {aiScore.confidence}</span>
-                </p>
-
-                {!!aiScore.strengths?.length && (
-                  <>
-                    <p className="muted" style={{ fontWeight: 700, margin: "8px 0 0" }}>
-                      Strengths
-                    </p>
-                    <ul>
-                      {aiScore.strengths.map((x, i) => (
-                        <li key={i}>{x}</li>
-                      ))}
-                    </ul>
-                  </>
-                )}
-                {!!aiScore.risks?.length && (
-                  <>
-                    <p className="muted" style={{ fontWeight: 700, margin: "8px 0 0" }}>
-                      Risks &amp; gaps
-                    </p>
-                    <ul>
-                      {aiScore.risks.map((x, i) => (
-                        <li key={i}>{x}</li>
-                      ))}
-                    </ul>
-                  </>
-                )}
-              </>
-            )}
-          </details>
-        )}
 
         {(demo || legacyVideos.length > 0 || !!d.liveLink || !!d.repoLink || docs.length > 0) && (
           <div className="card">
@@ -335,7 +258,91 @@ export default async function EvaluatePage({
             />
           </dl>
         </div>
-      </Scorecard>
-    </div>
+        {(aiScore || GROQ_ENABLED) && (
+          <details className="ai-block ai-assess">
+            <summary className="tag">
+              <span aria-hidden="true">◆</span> AI assessment
+            </summary>
+            <p className="ai-assess-caveat">
+              Supplementary. The panel&apos;s score is the score of record.
+            </p>
+
+            {!aiScore ? (
+              <div className="ai-assess-empty">
+                <RunAiButton submissionId={id} label="Run AI assessment" />
+              </div>
+            ) : (
+              <>
+                {aiScoreStale && (
+                  <div className="notice n-amber" style={{ margin: "8px 0 10px" }}>
+                    Generated under a previous version of the Assessment Model —
+                    re-run for the current criteria and weights.
+                  </div>
+                )}
+                <p style={{ margin: "8px 0 10px" }}>{aiScore.summary}</p>
+
+                <div className="table-wrap" style={{ margin: "0 0 10px" }}>
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Criterion</th>
+                        <th style={{ width: 60 }}>AI /5</th>
+                        <th>Rationale</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {aiScore.perCriterion.map((c) => (
+                        <tr key={c.key}>
+                          <td>
+                            {c.label}{" "}
+                            <span className="muted">{c.weight}%</span>
+                          </td>
+                          <td>
+                            <b>{c.score}</b>
+                          </td>
+                          <td className="muted">{c.rationale}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <p style={{ margin: "0 0 10px" }}>
+                  <b>AI weighted total: {aiScore.weightedTotal.toFixed(1)} / 100</b>{" "}
+                  <span className={`tierbanner ${TIER_CLASS[aiScore.tierKey] ?? ""}`}>
+                    {aiScore.tierLabel}
+                  </span>{" "}
+                  <span className="muted">· confidence {aiScore.confidence}</span>
+                </p>
+
+                {!!aiScore.strengths?.length && (
+                  <>
+                    <p className="muted" style={{ fontWeight: 700, margin: "8px 0 0" }}>
+                      Strengths
+                    </p>
+                    <ul>
+                      {aiScore.strengths.map((x, i) => (
+                        <li key={i}>{x}</li>
+                      ))}
+                    </ul>
+                  </>
+                )}
+                {!!aiScore.risks?.length && (
+                  <>
+                    <p className="muted" style={{ fontWeight: 700, margin: "8px 0 0" }}>
+                      Risks &amp; gaps
+                    </p>
+                    <ul>
+                      {aiScore.risks.map((x, i) => (
+                        <li key={i}>{x}</li>
+                      ))}
+                    </ul>
+                  </>
+                )}
+              </>
+            )}
+          </details>
+        )}
+    </Scorecard>
   );
 }

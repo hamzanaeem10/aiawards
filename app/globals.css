@@ -655,6 +655,218 @@ iframe.ev-video { aspect-ratio: 16 / 9; height: auto; max-height: 60vh; }
 .auth-fields input { padding: 14px 16px; background: var(--paper); border-radius: 10px; }
 .auth-submit { width: 100%; margin-top: 14px; padding: 15px 22px; border-radius: 10px; }
 .auth-foot { font-size: 0.75rem; color: var(--ink-3); line-height: 1.6; margin: 30px 0 0; }
+
+/* email-only sign-in: the lede under the heading, and the live hint that tells
+   you which side of the portal you are about to land on. */
+.auth-lede { font-size: 0.9rem; color: var(--ink-2); line-height: 1.6; margin: -22px 0 30px; }
+.route-hint {
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  margin: 4px 0 2px;
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+.route-hint-off { color: var(--ink-3); }
+.route-hint-on {
+  color: #6b1533;
+  background: var(--rose-wash);
+  border: 1px solid #f0d7e0;
+  border-radius: var(--radius-sm);
+  padding: 9px 13px;
+  width: 100%;
+}
+.route-hint-on b { color: var(--maroon); font-weight: 600; }
+
+/* OTP sign-in: the 6-digit code field and the "different email" text button. */
+.code-input {
+  font-family: var(--font-sans);
+  font-size: 1.6rem;
+  font-weight: 600;
+  letter-spacing: 0.42em;
+  text-align: center;
+  padding: 16px 12px 16px 24px;
+  background: var(--paper);
+  border-radius: 10px;
+  font-variant-numeric: tabular-nums;
+}
+.code-input::placeholder { color: var(--line); letter-spacing: 0.42em; font-weight: 500; }
+.auth-link {
+  display: inline-block;
+  margin-top: 18px;
+  padding: 0;
+  font: inherit;
+  font-size: 0.82rem;
+  color: var(--maroon);
+  background: none;
+  border: none;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.auth-link:hover { color: var(--maroon-600); }
+
+/* --- Approver sign-off ---------------------------------------------------- */
+
+/* Settled decision: reads as a result, not a form. The buttons live behind
+   "Change decision" so the same approver cannot re-approve by resubmitting. */
+.ap-done {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  margin-top: 14px;
+  padding: 15px 17px;
+  border: 1px solid;
+  border-radius: var(--radius-sm);
+}
+.ap-done.is-yes { background: var(--good-bg); border-color: #bfe3cb; }
+.ap-done.is-no  { background: var(--danger-bg); border-color: #f0c7cd; }
+.ap-mark {
+  flex: none;
+  width: 26px; height: 26px;
+  display: grid; place-items: center;
+  border-radius: 50%;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #fff;
+}
+.ap-done.is-yes .ap-mark { background: var(--good); }
+.ap-done.is-no  .ap-mark { background: var(--danger); }
+.ap-done-body { flex: 1 1 auto; min-width: 0; }
+.ap-done-body b { font-size: 0.9rem; }
+.ap-done.is-yes .ap-done-body b { color: #145c2c; }
+.ap-done.is-no  .ap-done-body b { color: #7f1e2d; }
+.ap-when { display: block; font-size: 0.78rem; color: var(--ink-3); margin-top: 2px; }
+.ap-done-notes {
+  margin: 8px 0 0;
+  font-size: 0.86rem;
+  line-height: 1.55;
+  color: var(--ink-2);
+  white-space: pre-wrap;
+}
+
+/* Undecided (or being revised). */
+.ap-panel {
+  margin-top: 14px;
+  padding: 16px;
+  background: var(--canvas);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+.ap-panel textarea {
+  width: 100%;
+  padding: 11px 13px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  font: inherit;
+  font-size: 0.88rem;
+  line-height: 1.55;
+  resize: vertical;
+}
+.ap-panel textarea:focus-visible { border-color: #dcc9d0; outline: 2px solid var(--rose-wash); }
+.ap-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 12px; }
+.btn.ap-yes { background: var(--good); border-color: var(--good); }
+.btn.ap-yes:hover { filter: brightness(1.08); }
+.btn.ghost.ap-no { color: var(--danger); }
+.btn.ghost.ap-no:hover { background: var(--danger-bg); border-color: #f0c7cd; }
+.ap-hint { font-size: 0.76rem; color: var(--ink-3); }
+.ap-cancel { margin-top: 10px; font-size: 0.78rem; }
+
+/* Roll-up of every approver's decision, above the per-submission detail. */
+.ap-tally { display: inline-flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.ap-pending { font-size: 0.78rem; color: var(--ink-3); }
+
+/* --- Section 2 team-member repeater ------------------------------------- */
+
+/* The submission type select lives in Section 1 but governs this list in
+   Section 2. Rather than lifting that value into client state, the form itself
+   is the common ancestor, so `:has()` expresses the dependency declaratively —
+   it needs no JavaScript, so the list still reveals itself for a Team
+   submission with scripting off, and there is no hydration boundary to keep in
+   sync. Default is visible: where `:has()` is unsupported the rows simply stay
+   on screen, and the server discards them for an Individual submission anyway. */
+form:has(select[name="submissionType"] option[value="Individual"]:checked)
+  .team-members {
+  display: none;
+}
+
+.tm-rows { display: grid; gap: 10px; }
+.tm-row {
+  display: grid;
+  grid-template-columns: 1fr 230px auto;
+  gap: 10px;
+  align-items: center;
+}
+/* Keep the remove control from collapsing the row when it is the only child. */
+.tm-row > input, .tm-row > select { min-width: 0; }
+.tm-remove {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  font-size: 1.1rem;
+  line-height: 1;
+  color: var(--ink-3);
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+.tm-remove:hover {
+  color: var(--danger);
+  background: var(--danger-bg);
+  border-color: #f0c7cd;
+}
+.tm-add { margin-top: 12px; }
+
+@media (max-width: 640px) {
+  .tm-row { grid-template-columns: 1fr auto; }
+  /* The contribution select drops to its own line rather than being squeezed. */
+  .tm-row > select { grid-column: 1 / -1; }
+}
+
+/* Team list on the evaluate screen (structured submissions only). */
+.team-list { margin: 0; padding: 0; list-style: none; }
+.team-list li { display: flex; gap: 8px; align-items: baseline; }
+.team-list li + li { margin-top: 3px; }
+/* --- Campaign banner on the submission form ----------------------------- */
+
+.form-banner {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;                /* clips the image to the rounded corners */
+  box-shadow: var(--sh-sm);
+  line-height: 0;                  /* removes the inline-image descender gap */
+  background: var(--canvas-2);     /* placeholder tone while the file loads */
+}
+.form-banner img {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1920 / 640;        /* reserves the box, so no layout shift */
+  object-fit: cover;
+}
+
+/* At 3:1 the artwork's headline becomes unreadable on a phone, so crop to a
+   taller box anchored left — that keeps the white panel and its wordmark and
+   drops the right-hand illustration, which carries no information. */
+@media (max-width: 640px) {
+  .form-banner img {
+    aspect-ratio: 16 / 9;
+    object-position: left center;
+  }
+}
+
+.team-contrib {
+  font-size: 0.74rem;
+  color: var(--ink-3);
+  background: var(--canvas);
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+  padding: 1px 8px;
+  white-space: nowrap;
+}
 .auth .notice { margin-bottom: 22px; }
 
 /* ---- the panel ---- */
@@ -701,6 +913,7 @@ iframe.ev-video { aspect-ratio: 16 / 9; height: auto; max-height: 60vh; }
   .auth-panel { display: none; }
   .auth-brand { top: 32px; left: 24px; }
   .auth-form { justify-content: center; padding: 132px 24px 64px; min-height: 100vh; min-height: 100dvh; }
+  .auth-lede { margin: -16px 0 26px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { inArray, desc, sql } from "drizzle-orm";
 import { db, submissions, evaluations } from "@/lib/db";
-import { getSession } from "@/lib/auth";
+import { canEvaluate, getSession } from "@/lib/auth";
 
 const PAGE_SIZE = 40;
 
@@ -33,7 +33,7 @@ export default async function QueuePage({
   searchParams: Promise<{ page?: string; recorded?: string }>;
 }) {
   const s = await getSession();
-  if (!s || (s.role !== "reviewer" && s.role !== "admin")) redirect("/login");
+  if (!s || !canEvaluate(s.role)) redirect("/login");
 
   const { page: pageRaw, recorded } = await searchParams;
   const page = Math.max(0, Number(pageRaw) - 1 || 0);

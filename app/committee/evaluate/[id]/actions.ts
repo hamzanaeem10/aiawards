@@ -6,7 +6,7 @@ import { eq, and } from "drizzle-orm";
 import {
   db, evaluations, submissions, statusHistory, auditLog, aiInsights,
 } from "@/lib/db";
-import { getSession } from "@/lib/auth";
+import { canEvaluate, getSession } from "@/lib/auth";
 import {
   CRITERIA,
   weightedTotal,
@@ -26,7 +26,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
  */
 export async function runAiAssessment(submissionId: string) {
   const s = await getSession();
-  if (!s || (s.role !== "reviewer" && s.role !== "admin")) {
+  if (!s || !canEvaluate(s.role)) {
     throw new Error("UNAUTHORIZED");
   }
   if (!UUID.test(submissionId)) throw new Error("NOT_FOUND");
@@ -63,7 +63,7 @@ export async function runAiAssessment(submissionId: string) {
 
 export async function recordAssessment(submissionId: string, formData: FormData) {
   const s = await getSession();
-  if (!s || (s.role !== "reviewer" && s.role !== "admin")) throw new Error("UNAUTHORIZED");
+  if (!s || !canEvaluate(s.role)) throw new Error("UNAUTHORIZED");
   if (!UUID.test(submissionId)) throw new Error("NOT_FOUND");
 
   // --- scores: ONLY from this human evaluator's form input --------------

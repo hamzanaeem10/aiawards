@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { desc, inArray, sql } from "drizzle-orm";
-import { db, submissions, users, evaluations } from "@/lib/db";
-import { getSession } from "@/lib/auth";
+import { db, submissions, users, evaluations, approvals } from "@/lib/db";
+import { canApprove, canSeeAggregate, getSession } from "@/lib/auth";
+import { recordApproval } from "./actions";
+import ApprovalPanel from "./ApprovalPanel";
 import { CRITERIA, TIERS, tierFor } from "@/lib/rubric";
 
 const PAGE_SIZE = 25;
@@ -32,7 +34,8 @@ export default async function AdminPage({
   searchParams: Promise<{ page?: string }>;
 }) {
   const s = await getSession();
-  if (!s || s.role !== "admin") redirect("/login");
+  if (!s || !canSeeAggregate(s.role)) redirect("/login");
+  const mayApprove = canApprove(s.role);
 
   const { page: pageRaw } = await searchParams;
   const page = Math.max(0, Number(pageRaw) - 1 || 0);
@@ -57,20 +60,39 @@ export default async function AdminPage({
     .select()
     .from(evaluations)
     .where(inArray(evaluations.submissionId, scope));
+  const allApprovals = await db
+    .select()
+    .from(approvals)
+    .where(inArray(approvals.submissionId, scope));
+
+  // Everyone who is expected to sign off, so the view can show what is still
+  // outstanding rather than only what has happened.
+  const approverRoster = evaluators.filter((u) => u.role === "approver" && u.active);
+  const approverCount = approverRoster.length;
+
+  const fmt = (d: Date) =>
+    new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 
   return (
     <div className="wrap stack">
       <div>
-        <div className="eyebrow">Administration</div>
+        <div className="eyebrow">{mayApprove ? "Approvals" : "Administration"}</div>
         <h1>Submissions overview</h1>
-        <div className="btn-row" style={{ marginTop: 14 }}>
-          <a className="btn ghost sm" href="/admin/export/submissions" download>
-            ⤓ Export submissions (CSV)
-          </a>
-          <a className="btn ghost sm" href="/admin/export/evaluations" download>
-            ⤓ Export evaluations (CSV)
-          </a>
-        </div>
+        {mayApprove ? (
+          <p className="muted" style={{ marginTop: 6 }}>
+            Review the panel&apos;s cumulative scoring and record your approval on
+            each submission.
+          </p>
+        ) : (
+          <div className="btn-row" style={{ marginTop: 14 }}>
+            <a className="btn ghost sm" href="/admin/export/submissions" download>
+              ⤓ Export submissions (CSV)
+            </a>
+            <a className="btn ghost sm" href="/admin/export/evaluations" download>
+              ⤓ Export evaluations (CSV)
+            </a>
+          </div>
+        )}
       </div>
 
       {subs.length === 0 && (
@@ -103,6 +125,15 @@ export default async function AdminPage({
                 0,
               ) / n
             : 0;
+
+        const subApprovals = allApprovals
+          .filter((a) => a.submissionId === sub.id)
+          .sort((a, b) => +new Date(a.decidedAt) - +new Date(b.decidedAt));
+        const mine = subApprovals.find((a) => a.approverUserId === s.userId) ?? null;
+        const yes = subApprovals.filter((a) => a.decision === "approved").length;
+        const no = subApprovals.filter((a) => a.decision === "disapproved").length;
+        const decidedBy = new Set(subApprovals.map((a) => a.approverUserId));
+        const pendingApprovers = approverRoster.filter((u) => !decidedBy.has(u.id));
 
         return (
           <div className="card pad-lg" key={sub.id}>
@@ -219,6 +250,69 @@ export default async function AdminPage({
                 </ul>
               </div>
             )}
+
+            {/* ---- approvals: sign-off recorded beside the panel score ---- */}
+            <div className="field" style={{ marginTop: 18 }}>
+              <label className="flabel">
+                Approvals
+                <span className="ap-tally" style={{ fontWeight: 400, marginLeft: 8 }}>
+                  <span className="muted">
+                    {subApprovals.length} of {approverCount} decided
+                  </span>
+                  {yes > 0 && <span className="badge b-good">{yes} approved</span>}
+                  {no > 0 && <span className="badge b-danger">{no} disapproved</span>}
+                </span>
+              </label>
+
+              {subApprovals.length === 0 ? (
+                <p className="muted" style={{ margin: 0 }}>
+                  No approver has recorded a decision yet.
+                </p>
+              ) : (
+                <ul className="eval-notes">
+                  {subApprovals.map((a) => {
+                    const who = evaluators.find((x) => x.id === a.approverUserId);
+                    return (
+                      <li key={a.id}>
+                        <b>{who?.name ?? "Approver"}</b>
+                        <span
+                          className={
+                            a.decision === "approved"
+                              ? "badge b-good"
+                              : "badge b-danger"
+                          }
+                          style={{ marginLeft: 6 }}
+                        >
+                          {a.decision === "approved" ? "Approved" : "Disapproved"}
+                        </span>
+                        <span className="muted" style={{ marginLeft: 6 }}>
+                          {fmt(a.decidedAt)}
+                        </span>
+                        {a.notes && (
+                          <div className="muted" style={{ marginTop: 2 }}>{a.notes}</div>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+
+              {pendingApprovers.length > 0 && subApprovals.length > 0 && (
+                <p className="ap-pending" style={{ margin: "8px 0 0" }}>
+                  Awaiting: {pendingApprovers.map((u) => u.name).join(", ")}
+                </p>
+              )}
+
+              {mayApprove && (
+                <ApprovalPanel
+                  action={recordApproval}
+                  submissionId={sub.id}
+                  current={mine ? (mine.decision as "approved" | "disapproved") : null}
+                  currentNotes={mine?.notes ?? null}
+                  decidedAt={mine ? fmt(mine.decidedAt) : null}
+                />
+              )}
+            </div>
           </div>
         );
       })}

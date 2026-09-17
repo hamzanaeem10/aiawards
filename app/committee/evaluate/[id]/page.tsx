@@ -4,11 +4,12 @@ import { eq, and, desc } from "drizzle-orm";
 import {
   db, submissions, attachments, evaluations, aiInsights,
 } from "@/lib/db";
-import { getSession } from "@/lib/auth";
+import { canEvaluate, getSession } from "@/lib/auth";
 import { CRITERIA, TIERS } from "@/lib/rubric";
 import { videoEmbed } from "@/lib/videoEmbed";
 import DemoPlayer from "./DemoPlayer";
-import { GROQ_ENABLED } from "@/lib/ai/groq";
+import { AI_ENABLED } from "@/lib/ai/llm";
+import { asTeamMemberList, teamMembersText } from "@/lib/teamMembers";
 import Scorecard from "./Scorecard";
 import RunAiButton from "./RunAiButton";
 import type { AiAssessment } from "@/lib/ai/assessment";
@@ -53,6 +54,34 @@ function Meta({ label, value }: { label: string; value?: unknown }) {
   );
 }
 
+/**
+ * Team members render as a list when the submission carries the structured
+ * shape. Submissions filed before that change hold a single free-text string,
+ * which has no structure to list — those fall back to the ordinary Meta row.
+ */
+function TeamMeta({ value }: { value?: unknown }) {
+  const members = asTeamMemberList(value);
+  if (!members.length) return <Meta label="Team" value={teamMembersText(value)} />;
+
+  return (
+    <div className="read-meta-row">
+      <dt>Team</dt>
+      <dd>
+        <ul className="team-list">
+          {members.map((m, i) => (
+            <li key={`${m.name}-${i}`}>
+              <span>{m.name}</span>
+              {m.contribution && (
+                <span className="team-contrib">{m.contribution}</span>
+              )}
+            </li>
+          ))}
+        </ul>
+      </dd>
+    </div>
+  );
+}
+
 export default async function EvaluatePage({
   params,
 }: {
@@ -60,7 +89,7 @@ export default async function EvaluatePage({
 }) {
   const { id } = await params;
   const s = await getSession();
-  if (!s || (s.role !== "reviewer" && s.role !== "admin")) redirect("/login");
+  if (!s || !canEvaluate(s.role)) redirect("/login");
 
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
     notFound();
@@ -259,14 +288,14 @@ export default async function EvaluatePage({
             <Meta label="Evidence stage" value={d.evidenceStage} />
             <Meta label="Scalability potential" value={d.scalability} />
             <Meta label="Adoption readiness" value={d.adoptionReadiness} />
-            <Meta label="Team" value={d.teamMembers} />
+            <TeamMeta value={d.teamMembers} />
             <Meta
               label="Sponsor"
               value={[d.sponsorName, d.sponsorRole].filter(Boolean).join(" — ")}
             />
           </dl>
         </div>
-        {(aiScore || GROQ_ENABLED) && (
+        {(aiScore || AI_ENABLED) && (
           <details className="ai-block ai-assess">
             <summary className="tag">
               <span aria-hidden="true">◆</span> AI assessment

@@ -7,6 +7,7 @@ import {
   jsonb,
   boolean,
   index,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 
 // ---- Users & roles -------------------------------------------------------
@@ -122,4 +123,71 @@ export const auditLog = pgTable("audit_log", {
 }, (t) => ({
   byAt: index("audit_log_at_idx").on(t.at),
   byTarget: index("audit_log_target_idx").on(t.target),
+}));
+
+/**
+ * One-time sign-in codes emailed to a user. Only a keyed hash of the code is
+ * stored, so a database reader cannot replay a live code — see lib/otp.ts.
+ * Rows are consumed on use and swept on the next issue for the same address.
+ */
+export const loginCodes = pgTable("login_codes", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  email: text("email").notNull(),
+  codeHash: text("code_hash").notNull(),
+  expiresAt: timestamp("expires_at").notNull(),
+  consumedAt: timestamp("consumed_at"),
+  attempts: integer("attempts").notNull().default(0),
+  requestIp: text("request_ip"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (t) => ({
+  byEmail: index("login_codes_email_idx").on(t.email),
+  byExpiry: index("login_codes_expires_at_idx").on(t.expiresAt),
+  // Per-IP throttling counts rows by (request_ip, created_at) on every code
+  // request, so this index keeps that a range scan rather than a table scan.
+  byIpTime: index("login_codes_ip_created_idx").on(t.requestIp, t.createdAt),
+}));
+
+/**
+ * Sign-off on a submission by an approver, recorded alongside — never instead
+ * of — the panel's scores. One decision per approver per submission, revisable
+ * (the row is updated, not duplicated), which the unique index enforces.
+ *
+ * This does NOT touch the score of record or the lifecycle status: those stay
+ * with the evaluators' `recordAssessment`. An approval is a governance step on
+ * top of the panel average.
+ */
+export const approvals = pgTable("approvals", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  submissionId: uuid("submission_id")
+    .references(() => submissions.id, { onDelete: "cascade" })
+    .notNull(),
+  approverUserId: uuid("approver_user_id").references(() => users.id).notNull(),
+  decision: text("decision").notNull(), // 'approved' | 'disapproved'
+  notes: text("notes"),
+  decidedAt: timestamp("decided_at").defaultNow().notNull(),
+}, (t) => ({
+  bySubmission: index("approvals_submission_idx").on(t.submissionId),
+  byApprover: index("approvals_approver_idx").on(t.approverUserId),
+  onePerApprover: uniqueIndex("approvals_submission_approver_uniq").on(
+    t.submissionId,
+    t.approverUserId,
+  ),
+}));
+
+/**
+ * Revoked session identifiers — the server-side half of logout.
+ *
+ * The session is a stateless JWT, so deleting the cookie only clears the
+ * browser's copy: a token captured beforehand stays valid until it expires
+ * (VAPT IDX-005). Every token now carries a `jti`, logout records that jti
+ * here, and getSession() refuses any token listed. Rows are only needed until
+ * the token would have expired anyway, so they are swept on write.
+ */
+export const revokedSessions = pgTable("revoked_sessions", {
+  jti: text("jti").primaryKey(),
+  userId: uuid("user_id").references(() => users.id),
+  expiresAt: timestamp("expires_at").notNull(),
+  revokedAt: timestamp("revoked_at").defaultNow().notNull(),
+}, (t) => ({
+  byExpiry: index("revoked_sessions_expires_at_idx").on(t.expiresAt),
 }));

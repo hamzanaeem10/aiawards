@@ -3,6 +3,7 @@ import { db, submissions, evaluations } from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { CRITERIA, TIERS, tierFor } from "@/lib/rubric";
 import { toCsv, csvResponse } from "@/lib/csv";
+import { teamMembersText } from "@/lib/teamMembers";
 
 export const dynamic = "force-dynamic";
 
@@ -110,6 +111,10 @@ export async function GET() {
         ...CRITERIA.map((c) => critAvg(c.key)),
         ...FIELDS.map(([key]) => {
           const v = d[key];
+          // teamMembers is an array of objects on current submissions and a
+          // plain string on older ones; the generic join below would emit
+          // "[object Object]" for the former.
+          if (key === "teamMembers") return teamMembersText(v);
           return Array.isArray(v) ? v.join("; ") : v;
         }),
       ];

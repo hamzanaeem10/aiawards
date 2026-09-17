@@ -5,7 +5,8 @@ import {
   tierFor,
   type CriterionKey,
 } from "@/lib/rubric";
-import { GROQ_MODEL, groqJson } from "./groq";
+import { AI_MODEL, llmJson } from "./llm";
+import { teamMembersText } from "@/lib/teamMembers";
 
 export type AiAssessment = {
   perCriterion: {
@@ -70,7 +71,8 @@ Do NOT output a weighted total or a tier — the system computes those from your
 
 // ---- the per-submission user message ----------------------------------------
 
-function submissionBlock(sub: {
+/** Exported so the field mapping can be asserted directly in tests. */
+export function submissionBlock(sub: {
   initiativeName: string;
   theme: string | null;
   functionArea: string | null;
@@ -100,7 +102,9 @@ function submissionBlock(sub: {
     ["Key metrics (as reported)", g("keyMetrics")],
     ["Responsible AI details", g("responsibleAI")],
     ["Adoption readiness", g("adoptionReadiness")],
-    ["Team", g("teamMembers")],
+    // Not g(): teamMembers is an array of objects on current submissions and a
+    // string on older ones — g() would put "[object Object]" in the prompt.
+    ["Team", teamMembersText(d["teamMembers"])],
     ["Sponsor", [g("sponsorName"), g("sponsorRole")].filter(Boolean).join(" — ")],
     ["Demo video link", g("demoVideoUrl")],
     ["Live link", g("liveLink")],
@@ -120,7 +124,7 @@ export async function generateAiAssessment(sub: {
   useCaseStage: string | null;
   data: Record<string, unknown>;
 }): Promise<{ model: string; content: AiAssessment }> {
-  const raw = await groqJson({
+  const raw = await llmJson({
     system: SYSTEM,
     user:
       "Assess this submission against the JazzWorld Assessment Model.\n\n" +
@@ -162,7 +166,7 @@ export async function generateAiAssessment(sub: {
   const conf = String(raw.confidence).toLowerCase();
 
   return {
-    model: GROQ_MODEL,
+    model: AI_MODEL,
     content: {
       perCriterion,
       weightedTotal: total,

@@ -47,6 +47,18 @@ export async function putObject(key: string, body: Buffer, contentType: string) 
 }
 
 /**
+ * Fetch an object for streaming back through the app.
+ *
+ * Attachments are proxied by /api/files rather than handed to the browser as a
+ * presigned URL: it keeps the object store off the public path, keeps the
+ * download on the app's own origin, and means access is re-checked against the
+ * session on every request instead of being bearer-in-a-URL for five minutes.
+ */
+export async function getObject(key: string) {
+  return s3.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
+}
+
+/**
  * Short-lived direct URL. `attachment: true` forces a download (docs);
  * otherwise the object is served inline (video plays in place).
  */

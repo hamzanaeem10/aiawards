@@ -2,9 +2,12 @@ import { redirect } from "next/navigation";
 import { and, eq, gt } from "drizzle-orm";
 import { db, submissions, attachments, statusHistory, auditLog } from "@/lib/db";
 import { getSession } from "@/lib/auth";
+import { ALLOWED_EMAIL_DOMAINS, isEmailAllowed, normalizeEmail } from "@/lib/otp";
+import { readTeamMembers } from "@/lib/teamMembers";
 import { newKey, putObject } from "@/lib/storage";
 import { MAX_FILE_BYTES, MAX_FILES, humanSize } from "@/lib/uploads";
 import Evidence from "./Evidence";
+import TeamMembers from "./TeamMembers";
 import SubmitButton from "./SubmitButton";
 
 const FUNCTIONS = [
@@ -36,12 +39,32 @@ const TECH = [
 
 async function submitInitiative(formData: FormData) {
   "use server";
+  // A server action is its own POST endpoint, reachable by anyone who has seen
+  // the page — the redirect guard on SubmitPage below protects the render only.
+  // This action previously read the session without requiring it
+  // (`session?.userId ?? null`), so an unauthenticated or signed-out client
+  // could still file a submission. Authorise here, in the action itself.
   const session = await getSession();
+  if (!session) redirect("/login");
+
   const g = (k: string) => String(formData.get(k) || "").trim();
 
+  // Team members arrive as parallel repeated fields from the Section 2 repeater.
+  // The list is stored only for a Team submission: the rows stay in the DOM when
+  // the type is Individual (they are merely hidden by CSS), so the server is the
+  // authority on whether they count, not the client.
+  const submissionType = g("submissionType");
+  const teamMembers =
+    submissionType === "Team"
+      ? readTeamMembers(
+          formData.getAll("teamMemberName").map(String),
+          formData.getAll("teamMemberContribution").map(String),
+        )
+      : [];
+
   const data: Record<string, unknown> = {
-    submissionType: g("submissionType"),
-    teamMembers: g("teamMembers"),
+    submissionType,
+    teamMembers,
     sponsorName: g("sponsorName"),
     sponsorRole: g("sponsorRole"),
     challenge: g("challenge"),
@@ -65,7 +88,14 @@ async function submitInitiative(formData: FormData) {
   };
 
   const initiativeName = g("initiativeName");
-  const submitterEmail = g("submitterEmail");
+  const submitterEmail = normalizeEmail(g("submitterEmail"));
+
+  // VULN-004: the form previously accepted any address, so a submission could
+  // be filed under an arbitrary external mailbox (e.g. @yopmail.com). The
+  // browser's type="email" check is a usability aid only — an attacker posts
+  // the action directly — so the domain is enforced here, server-side, using
+  // the same allowlist that gates sign-in.
+  if (!isEmailAllowed(submitterEmail)) redirect("/submit?e=domain");
 
   // Guard against a double-submit (fast double-click, browser retry): if an
   // identical submission landed in the last 2 minutes, reuse it.
@@ -86,7 +116,7 @@ async function submitInitiative(formData: FormData) {
     .values({
       status: "SUBMITTED",
       data,
-      submitterUserId: session?.userId ?? null,
+      submitterUserId: session.userId,
       submitterName: g("submitterName"),
       submitterEmail,
       initiativeName,
@@ -125,7 +155,7 @@ async function submitInitiative(formData: FormData) {
     submissionId: row.id, from: null, to: "SUBMITTED", note: "Submitted",
   });
   await db.insert(auditLog).values({
-    actorUserId: session?.userId ?? null,
+    actorUserId: session.userId,
     action: "submission.create",
     target: row.id,
   });
@@ -156,13 +186,43 @@ function Section({
   );
 }
 
-export default async function SubmitPage() {
+export default async function SubmitPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ e?: string }>;
+}) {
+  // Reachable only behind sign-in, same as the landing page.
+  if (!(await getSession())) redirect("/login");
+  const { e } = await searchParams;
+
   return (
     <div className="wrap stack">
-      <section className="hero">
-        <div className="eyebrow">Share your idea or use case</div>
-        <h1>AI Initiative Submission</h1>
-      </section>
+      {/* Campaign banner. Plain <img> rather than next/image to match the
+          Logo component and keep the standalone build free of the image
+          optimiser. width/height are the intrinsic pixels, so the browser
+          reserves the right box before the file loads and nothing shifts. */}
+      <div className="form-banner">
+        <img
+          src="/ai-impact-banner.jpg"
+          alt="AI Impact Awards 2026 — Think AI, Build Bold, Win Big"
+          width={1920}
+          height={640}
+        />
+      </div>
+
+      {/* The banner carries the page's identity, so the maroon hero that used
+          to sit here was removed. The heading stays for assistive tech and
+          document structure — a page still needs an h1, and the banner is an
+          image, not a heading. */}
+      <h1 className="sr-only">AI Initiative Submission</h1>
+
+      {e === "domain" && (
+        <div className="notice n-danger" role="alert">
+          Use your work email address (
+          {ALLOWED_EMAIL_DOMAINS.map((d) => "@" + d).join(" or ")}) as the
+          submitter email.
+        </div>
+      )}
 
       <form action={submitInitiative} className="stack">
         <Section n={1} title="Initiative overview">
@@ -180,9 +240,13 @@ export default async function SubmitPage() {
           <div className="row2">
             <div className="field">
               <label className="flabel">Submission type</label>
+              {/* Explicit value attributes matter: the CSS rule that reveals the
+                  Section 2 team list keys off `option[value="Team"]:checked`,
+                  and an attribute selector cannot see a value that is only
+                  implied by the option's text. */}
               <select name="submissionType" defaultValue="Individual">
-                <option>Individual</option>
-                <option>Team</option>
+                <option value="Individual">Individual</option>
+                <option value="Team">Team</option>
               </select>
             </div>
             <div className="field">
@@ -235,18 +299,15 @@ export default async function SubmitPage() {
               <label className="flabel">
                 Submitter email <span className="req">*</span>
               </label>
-              <input type="email" name="submitterEmail" required />
+              <input
+                type="email"
+                name="submitterEmail"
+                required
+                placeholder={`you@${ALLOWED_EMAIL_DOMAINS[0] ?? "jazz.com.pk"}`}
+              />
             </div>
           </div>
-          <div className="field">
-            <label className="flabel">
-              Team members <span className="opt">optional</span>
-            </label>
-            <textarea
-              name="teamMembers"
-              placeholder="Name — role / function, one per line"
-            />
-          </div>
+          <TeamMembers />
           <div className="row2">
             <div className="field">
               <label className="flabel">

@@ -1,0 +1,1 @@
+CREATE INDEX IF NOT EXISTS "login_codes_ip_created_idx" ON "login_codes" USING btree ("request_ip","created_at");

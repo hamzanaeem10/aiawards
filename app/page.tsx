@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
+import { destroySession, getSession } from "@/lib/auth";
 import { Logo } from "./components/Logo";
 import "./landing.css";
 
@@ -8,7 +10,19 @@ const STEPS: [string, string][] = [
   ["03", "Get recognized"],
 ];
 
-export default function Home() {
+async function signOut() {
+  "use server";
+  await destroySession();
+  redirect("/login");
+}
+
+// The landing page is public: it is the front door for nominees, and carries no
+// data worth protecting. Sign-in is enforced where it matters — /submit and its
+// server action — so an anonymous visitor reads the hero, clicks through, and is
+// asked to sign in at that point rather than before seeing anything.
+export default async function Home() {
+  const session = await getSession();
+
   return (
     <main className="lp-page">
       <div className="lp-inner">
@@ -20,6 +34,16 @@ export default function Home() {
               <span>AI Impact Awards</span>
             </span>
           </span>
+          {session ? (
+            <form action={signOut} className="lp-who">
+              <span>{session.name}</span>
+              <button type="submit">Sign out</button>
+            </form>
+          ) : (
+            <span className="lp-who">
+              <Link href="/login">Sign in</Link>
+            </span>
+          )}
         </header>
 
         <section className="lp-hero">

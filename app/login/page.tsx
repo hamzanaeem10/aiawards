@@ -1,23 +1,56 @@
 import { redirect } from "next/navigation";
-import { verifyLogin, createSession, getSession } from "@/lib/auth";
+import { getSession, homeFor, setPendingLogin } from "@/lib/auth";
+import { clientIp } from "@/lib/clientIp";
+import { loginCodeEmail, sendMail } from "@/lib/mail";
+import {
+  ALLOWED_EMAIL_DOMAINS,
+  CODE_TTL_MINUTES,
+  isEmailAllowed,
+  issueCode,
+  normalizeEmail,
+} from "@/lib/otp";
 import { Logo } from "../components/Logo";
 import AwardMark from "./AwardMark";
+import EmailForm from "./EmailForm";
 
-async function login(formData: FormData) {
+// Step 1 of sign-in: prove you can read the mailbox. No password exists.
+async function requestCode(formData: FormData) {
   "use server";
-  const email = String(formData.get("email") || "");
-  const password = String(formData.get("password") || "");
-  const u = await verifyLogin(email, password);
-  if (!u) redirect("/login?e=1");
-  await createSession(u);
-  redirect(
-    u.role === "nominee"
-      ? "/submit"
-      : u.role === "admin"
-        ? "/admin"
-        : "/committee/queue",
-  );
+  const email = normalizeEmail(String(formData.get("email") || ""));
+
+  if (!isEmailAllowed(email)) redirect("/login?e=domain");
+
+  const ip = await clientIp();
+
+  const issued = await issueCode(email, ip);
+  if (!issued.ok) {
+    redirect(issued.reason === "ip_rate_limited" ? "/login?e=iprate" : "/login?e=rate");
+  }
+
+  const { subject, text, html } = loginCodeEmail(issued.code, CODE_TTL_MINUTES);
+  try {
+    await sendMail({ to: email, subject, text, html });
+  } catch {
+    // The code exists but could not be delivered — almost always the SMTP
+    // relay being unreachable. Say so rather than parking the user on a
+    // verify screen waiting for mail that will never arrive.
+    redirect("/login?e=send");
+  }
+
+  await setPendingLogin({ email, codeId: issued.codeId });
+  redirect("/login/verify");
 }
+
+const ERRORS: Record<string, string> = {
+  domain: `Use your work email address (${ALLOWED_EMAIL_DOMAINS.map((d) => "@" + d).join(" or ")}).`,
+  rate: "Too many codes requested for that address. Wait a few minutes and try again.",
+  iprate:
+    "Too many sign-in codes requested from this device. Wait a while and try again, or contact the awards team.",
+  send: "We couldn't send the email just now. Please try again, or contact the awards team.",
+  expired: "That code expired. Request a new one.",
+  attempts: "Too many incorrect attempts. Request a new code.",
+  inactive: "That account has been deactivated. Contact the awards team.",
+};
 
 export default async function LoginPage({
   searchParams,
@@ -25,7 +58,7 @@ export default async function LoginPage({
   searchParams: Promise<{ e?: string }>;
 }) {
   const existing = await getSession();
-  if (existing) redirect(existing.role === "admin" ? "/admin" : "/committee/queue");
+  if (existing) redirect(homeFor(existing.role));
   const { e } = await searchParams;
 
   return (
@@ -41,40 +74,22 @@ export default async function LoginPage({
       <div className="auth-form">
         <div className="auth-inner">
           <h1>Sign in</h1>
+          <p className="auth-lede">
+            Enter your work email and we&apos;ll send you a {CODE_TTL_MINUTES}-minute
+            sign-in code. No password to remember.
+          </p>
 
           {e && (
             <div className="notice n-danger" role="alert">
-              That email and password don&apos;t match an account.
+              {ERRORS[e] ?? "Something went wrong. Please try again."}
             </div>
           )}
 
-          <form action={login} className="auth-fields">
-            <div className="field">
-              <label className="flabel" htmlFor="email">
-                Email
-              </label>
-              <input id="email" type="email" name="email" required autoFocus autoComplete="email" />
-            </div>
-            <div className="field">
-              <label className="flabel" htmlFor="password">
-                Password
-              </label>
-              <input
-                id="password"
-                type="password"
-                name="password"
-                required
-                autoComplete="current-password"
-              />
-            </div>
-            <button className="btn auth-submit" type="submit">
-              Sign in
-            </button>
-          </form>
+          <EmailForm action={requestCode} />
 
           <p className="auth-foot">
-            Evaluators and administrators only. An administrator can issue you a
-            new password.
+            Nominees, evaluators and administrators all sign in here — you&apos;re
+            routed automatically once your code is verified.
           </p>
         </div>
       </div>

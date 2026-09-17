@@ -18,3 +18,14 @@ tsconfig.tsbuildinfo
 
 .vercel
 .env*
+
+# TLS private keys and CSRs — never commit
+certs/
+*.key
+*.pem
+
+# Database dumps may contain submission content
+backups/
+
+# Packaged for email; the source lives in postman/
+AI-Awards-Portal-Postman.zip

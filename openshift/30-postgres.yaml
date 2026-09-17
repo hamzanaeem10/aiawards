@@ -1,0 +1,106 @@
+# ONLY needed if the cluster cannot reach Neon (neon.tech). Skip this file
+# entirely on the Neon path.
+#
+# Uses Red Hat's sclorg Postgres image: unlike docker.io/postgres it tolerates
+# the arbitrary UID that OpenShift's restricted-v2 SCC assigns. The upstream
+# postgres image WILL crash-loop here (it tries to chown its data dir).
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: aiawards-pgdata
+  labels:
+    app.kubernetes.io/part-of: aiawards
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 20Gi
+  # storageClassName: <set if the cluster has no default StorageClass>
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: aiawards-db
+  labels:
+    app: aiawards-db
+    app.kubernetes.io/part-of: aiawards
+    app.openshift.io/runtime: postgresql
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate      # one RWO volume — never two writers
+  selector:
+    matchLabels:
+      app: aiawards-db
+  template:
+    metadata:
+      labels:
+        app: aiawards-db
+    spec:
+      containers:
+        - name: postgresql
+          image: quay.io/sclorg/postgresql-16-c9s:latest
+          ports:
+            - name: postgresql
+              containerPort: 5432
+          env:
+            - name: POSTGRESQL_USER
+              valueFrom:
+                secretKeyRef: { name: aiawards-db, key: user }
+            - name: POSTGRESQL_PASSWORD
+              valueFrom:
+                secretKeyRef: { name: aiawards-db, key: password }
+            - name: POSTGRESQL_DATABASE
+              valueFrom:
+                secretKeyRef: { name: aiawards-db, key: database }
+            - name: POSTGRESQL_MAX_CONNECTIONS
+              value: "100"
+            - name: POSTGRESQL_SHARED_BUFFERS
+              value: "512MB"
+          readinessProbe:
+            exec:
+              command: ["/usr/libexec/check-container"]
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+          livenessProbe:
+            tcpSocket:
+              port: postgresql
+            initialDelaySeconds: 60
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 2Gi
+          volumeMounts:
+            - name: pgdata
+              mountPath: /var/lib/pgsql/data
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            capabilities:
+              drop: ["ALL"]
+            seccompProfile:
+              type: RuntimeDefault
+      volumes:
+        - name: pgdata
+          persistentVolumeClaim:
+            claimName: aiawards-pgdata
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: aiawards-db
+  labels:
+    app: aiawards-db
+    app.kubernetes.io/part-of: aiawards
+spec:
+  selector:
+    app: aiawards-db
+  ports:
+    - name: postgresql
+      port: 5432
+      targetPort: postgresql

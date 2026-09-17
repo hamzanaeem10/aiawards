@@ -1,0 +1,175 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: aiawards
+  labels:
+    app: aiawards
+    app.kubernetes.io/name: aiawards
+    app.kubernetes.io/part-of: aiawards
+    app.openshift.io/runtime: nodejs
+  annotations:
+    # Redeploy automatically whenever a new image lands in the ImageStream.
+    image.openshift.io/triggers: |
+      [{"from":{"kind":"ImageStreamTag","name":"aiawards:latest"},
+        "fieldPath":"spec.template.spec.containers[?(@.name==\"aiawards\")].image"}]
+spec:
+  replicas: 2
+  revisionHistoryLimit: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app: aiawards
+  template:
+    metadata:
+      labels:
+        app: aiawards
+    spec:
+      containers:
+        - name: aiawards
+          # Overwritten by the ImageStream trigger above on first sync.
+          image: image-registry.openshift-image-registry.svc:5000/people-org/aiawards:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 3000
+              protocol: TCP
+          env:
+            - name: NODE_ENV
+              value: production
+            # CRITICAL: Kubernetes sets HOSTNAME to the pod name, and Next's
+            # standalone server binds to $HOSTNAME. Without this it does not
+            # listen on 0.0.0.0 and every probe fails.
+            - name: HOSTNAME
+              value: "0.0.0.0"
+            - name: PORT
+              value: "3000"
+            # Per-pod pool. replicas x DB_POOL_MAX must stay under the Neon
+            # (or Postgres) connection ceiling.
+            - name: DB_POOL_MAX
+              value: "5"
+            - name: NODE_OPTIONS
+              value: "--max-old-space-size=768"
+            # MinIO is reached over its OpenShift Route, whose certificate is
+            # issued by Jazz Issuer CA-1 — not in the UBI image's trust store.
+            # Without this, every attachment upload fails with
+            # SELF_SIGNED_CERT_IN_CHAIN.
+            - name: NODE_EXTRA_CA_CERTS
+              value: /etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem
+          envFrom:
+            - secretRef:
+                name: aiawards-env
+          # /api/health returns 503 until Postgres answers, so it gates traffic.
+          startupProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            periodSeconds: 5
+            failureThreshold: 30
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          # Liveness is deliberately a TCP check: a database blip should drain
+          # the pod from the Service, not restart a perfectly healthy process.
+          livenessProbe:
+            tcpSocket:
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 20
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+          volumeMounts:
+            - name: next-cache
+              mountPath: /app/.next/cache
+            - name: tmp
+              mountPath: /tmp
+            - name: trusted-ca
+              mountPath: /etc/pki/ca-trust/extracted/pem
+              readOnly: true
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            readOnlyRootFilesystem: false
+            capabilities:
+              drop: ["ALL"]
+            seccompProfile:
+              type: RuntimeDefault
+      volumes:
+        # Next writes its ISR/fetch cache here; keep it off the image layer.
+        - name: next-cache
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
+        # Cluster-wide trusted CA bundle, injected by the Network Operator into
+        # the labelled ConfigMap (see 23-trusted-ca.yaml). Projected under the
+        # file name Node expects from NODE_EXTRA_CA_CERTS.
+        - name: trusted-ca
+          configMap:
+            name: trusted-ca-bundle
+            items:
+              - key: ca-bundle.crt
+                path: tls-ca-bundle.pem
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: aiawards
+  labels:
+    app: aiawards
+    app.kubernetes.io/part-of: aiawards
+spec:
+  selector:
+    app: aiawards
+  ports:
+    - name: http
+      port: 3000
+      targetPort: http
+      protocol: TCP
+---
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: aiawards
+  labels:
+    app: aiawards
+    app.kubernetes.io/part-of: aiawards
+  annotations:
+    # Supporting-file uploads go through the router; give them room.
+    haproxy.router.openshift.io/timeout: 120s
+spec:
+  # Leave host unset and OpenShift assigns aiawards-people-org.apps.ocpv2.jazz.com.pk
+  # host: awards.jazz.com.pk
+  to:
+    kind: Service
+    name: aiawards
+    weight: 100
+  port:
+    targetPort: http
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
+---
+# The session cookie is httpOnly+secure; two pods with the same AUTH_SECRET
+# share sessions fine, so no affinity is needed. This just keeps one pod up.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: aiawards
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: aiawards

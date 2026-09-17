@@ -1,0 +1,15 @@
+# Runs drizzle migrations + the bootstrap-admin seed as a Job. Needs the source,
+# node_modules and tsx — none of which require network at run time.
+FROM image-registry.openshift-image-registry.svc:5000/people-org/aiawards-deps:latest AS deps
+
+FROM registry.access.redhat.com/ubi9/nodejs-22:1 AS migrator
+USER 0
+WORKDIR /app
+COPY --from=deps /deps/node_modules ./node_modules
+COPY . .
+# `npm ci --ignore-scripts` was used upstream, so esbuild's postinstall never
+# ran; make sure its prebuilt binary is executable for tsx.
+RUN chmod +x node_modules/@esbuild/linux-x64/bin/esbuild 2>/dev/null || true \
+ && chgrp -R 0 /app && chmod -R g=u /app
+USER 1001
+CMD ["sh", "-c", "./node_modules/.bin/tsx lib/db/migrate.ts && ./node_modules/.bin/tsx lib/db/seed.ts"]

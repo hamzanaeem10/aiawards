@@ -1,0 +1,68 @@
+# One-shot: apply the drizzle migrations, then create the bootstrap admin.
+# Both are idempotent — db:migrate skips applied migrations, db:seed skips an
+# existing admin — so it is safe to re-run after every deploy.
+#
+#   oc delete job/aiawards-migrate --ignore-not-found
+#   oc apply -f openshift/21-migrate-job.yaml
+#   oc logs -f job/aiawards-migrate
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: aiawards-migrate
+  labels:
+    app: aiawards
+    app.kubernetes.io/part-of: aiawards
+spec:
+  backoffLimit: 2
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels:
+        app: aiawards
+        job: aiawards-migrate
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: migrate
+          image: image-registry.openshift-image-registry.svc:5000/people-org/aiawards-migrator:latest
+          workingDir: /app
+          # tsx is invoked directly rather than via `npm run`: npm wants a
+          # writable $HOME for its cache/logs, and the arbitrary UID OpenShift
+          # assigns has none.
+          command:
+            - sh
+            - -c
+            - |
+              set -e
+              ./node_modules/.bin/tsx lib/db/migrate.ts
+              ./node_modules/.bin/tsx lib/db/seed.ts
+          envFrom:
+            - secretRef:
+                name: aiawards-env
+          env:
+            - name: HOME
+              value: /tmp
+            # DDL on a pooled Neon connection can misbehave; the migrate script
+            # reads DATABASE_URL, so point it at the direct (unpooled) host.
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: aiawards-env
+                  key: DATABASE_URL_UNPOOLED
+                  optional: true
+            - name: DB_POOL_MAX
+              value: "2"
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 768Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            capabilities:
+              drop: ["ALL"]
+            seccompProfile:
+              type: RuntimeDefault

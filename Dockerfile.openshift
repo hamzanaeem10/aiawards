@@ -1,0 +1,43 @@
+# OpenShift (ocpv2) variant. Use the plain `Dockerfile` anywhere that can reach
+# registry.npmjs.org — this file exists only because this cluster cannot.
+#
+# The cluster's egress resets TLS to both registry-1.docker.io and
+# registry.npmjs.org, so:
+#   • base images come from registry.access.redhat.com (reachable, no auth)
+#   • node_modules comes from the `aiawards-deps` image, cross-installed for
+#     linux/x64/glibc on a workstation (see Dockerfile.deps)
+# No step here touches the public internet.
+
+# ---- deps (pre-resolved, from the in-cluster registry) ----
+FROM image-registry.openshift-image-registry.svc:5000/people-org/aiawards-deps:latest AS deps
+
+# ---- build ----
+FROM registry.access.redhat.com/ubi9/nodejs-22:1 AS build
+USER 0
+WORKDIR /app
+COPY --from=deps /deps/node_modules ./node_modules
+COPY . .
+# Fonts are a runtime @import in globals.css, not a build-time fetch, so
+# `next build` needs no network.
+RUN NODE_OPTIONS=--max-old-space-size=3072 npm run build
+
+# ---- runtime (Next standalone) ----
+FROM registry.access.redhat.com/ubi9/nodejs-22-minimal:1 AS runner
+USER 0
+WORKDIR /app
+# HOSTNAME: Next's standalone server binds to $HOSTNAME. Kubernetes sets
+# HOSTNAME to the pod name, so without this it never listens on 0.0.0.0 and
+# every probe fails. The Deployment sets it again explicitly.
+ENV NODE_ENV=production \
+    PORT=3000 \
+    HOSTNAME=0.0.0.0
+COPY --from=build /app/.next/standalone ./
+COPY --from=build /app/.next/static ./.next/static
+COPY --from=build /app/public ./public
+# restricted-v2 SCC runs an arbitrary UID in group 0.
+RUN mkdir -p .next/cache \
+ && chgrp -R 0 /app \
+ && chmod -R g=u /app
+USER 1001
+EXPOSE 3000
+CMD ["node", "server.js"]

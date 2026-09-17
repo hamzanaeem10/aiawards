@@ -12,3 +12,6 @@ node_modules
 scratchpad
 jazz-world-logo*.png
 docs
+
+# 2 MB source artwork; the web-optimised copy ships in public/
+AI-Impact-Email-Banner.jpg.jpeg

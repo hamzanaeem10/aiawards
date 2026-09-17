@@ -1,0 +1,104 @@
+# Three images, all built in-cluster with ZERO public-internet access:
+#
+#   aiawards-deps     pre-resolved linux/x64 node_modules (rebuild only when
+#                     package-lock.json changes)
+#   aiawards          the Next.js standalone runtime  -> the Deployment
+#   aiawards-migrator source + tsx                    -> the migrate/seed Job
+#
+# Why this shape: the ocpv2 cluster resets TLS to registry-1.docker.io AND
+# registry.npmjs.org, so neither `FROM node:22-alpine` nor `npm ci` works in a
+# build pod. Base images therefore come from registry.access.redhat.com, and
+# node_modules is cross-installed on a workstation, then baked into
+# aiawards-deps once. See openshift/README.md ("Air-gapped build").
+#
+# The durable fix is to have registry.npmjs.org allowlisted (or an internal npm
+# mirror stood up); then switch dockerfilePath back to plain `Dockerfile`.
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: aiawards-deps
+  labels:
+    app.kubernetes.io/name: aiawards
+    app.kubernetes.io/part-of: aiawards
+spec:
+  source:
+    type: Binary
+    binary: {}
+  strategy:
+    type: Docker
+    dockerStrategy:
+      dockerfilePath: Dockerfile.deps
+  output:
+    to:
+      kind: ImageStreamTag
+      name: aiawards-deps:latest
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: "2"
+      memory: 3Gi
+  successfulBuildsHistoryLimit: 2
+  failedBuildsHistoryLimit: 2
+---
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: aiawards
+  labels:
+    app.kubernetes.io/name: aiawards
+    app.kubernetes.io/part-of: aiawards
+spec:
+  source:
+    type: Binary
+    binary: {}
+  strategy:
+    type: Docker
+    dockerStrategy:
+      dockerfilePath: Dockerfile.openshift
+      # Pulling aiawards-deps from the internal registry needs the build's
+      # service account, which already has image-puller in its own namespace.
+      forcePull: false
+  output:
+    to:
+      kind: ImageStreamTag
+      name: aiawards:latest
+  resources:
+    requests:
+      cpu: "1"
+      memory: 3Gi
+    limits:
+      cpu: "2"
+      memory: 6Gi
+  successfulBuildsHistoryLimit: 3
+  failedBuildsHistoryLimit: 3
+---
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: aiawards-migrator
+  labels:
+    app.kubernetes.io/name: aiawards
+    app.kubernetes.io/part-of: aiawards
+spec:
+  source:
+    type: Binary
+    binary: {}
+  strategy:
+    type: Docker
+    dockerStrategy:
+      dockerfilePath: Dockerfile.migrator
+  output:
+    to:
+      kind: ImageStreamTag
+      name: aiawards-migrator:latest
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: "1"
+      memory: 2Gi
+  successfulBuildsHistoryLimit: 2
+  failedBuildsHistoryLimit: 2

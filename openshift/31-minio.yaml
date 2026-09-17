@@ -1,0 +1,181 @@
+# ONLY needed if the cluster cannot reach Neon Object Storage. Skip on the Neon path.
+#
+# IMPORTANT: lib/storage.ts hands the BROWSER a 5-minute presigned URL, so the
+# S3 endpoint must be the address the browser can reach — the Route host below,
+# NOT http://aiawards-minio:9000. Set S3_ENDPOINT in the app secret to
+#   https://<the Route host from `oc get route aiawards-minio`>
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: aiawards-miniodata
+  labels:
+    app.kubernetes.io/part-of: aiawards
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 50Gi
+  # MUST be kasten-sc, not the default huawei-csi. Both use the csi.huawei.com
+  # provisioner, but only kasten-sc applies the pod's fsGroup to the mounted
+  # volume. On huawei-csi the volume root stays root:root 0755 and MinIO — which
+  # runs as OpenShift's arbitrary UID under restricted-v2 — cannot create
+  # /data/.minio.sys, so it crash-loops with "file access denied".
+  # Verified empirically: huawei-csi -> drwxr-xr-x 0 0 (unwritable)
+  #                      kasten-sc  -> drwxrwsr-x 0 1001410000 (writable)
+  storageClassName: kasten-sc
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: aiawards-minio
+  labels:
+    app: aiawards-minio
+    app.kubernetes.io/part-of: aiawards
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: aiawards-minio
+  template:
+    metadata:
+      labels:
+        app: aiawards-minio
+    spec:
+      containers:
+        - name: minio
+          image: quay.io/minio/minio:latest
+          args: ["server", "/data", "--console-address", ":9001"]
+          ports:
+            - name: s3
+              containerPort: 9000
+            - name: console
+              containerPort: 9001
+          env:
+            - name: MINIO_ROOT_USER
+              valueFrom:
+                secretKeyRef: { name: aiawards-minio, key: accessKey }
+            - name: MINIO_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef: { name: aiawards-minio, key: secretKey }
+            # Presigned URLs must be signed for the public host, not the pod's.
+            - name: MINIO_SERVER_URL
+              valueFrom:
+                secretKeyRef: { name: aiawards-minio, key: publicUrl }
+          readinessProbe:
+            httpGet:
+              path: /minio/health/ready
+              port: s3
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /minio/health/live
+              port: s3
+            initialDelaySeconds: 30
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 100m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 2Gi
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            capabilities:
+              drop: ["ALL"]
+            seccompProfile:
+              type: RuntimeDefault
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: aiawards-miniodata
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: aiawards-minio
+  labels:
+    app: aiawards-minio
+    app.kubernetes.io/part-of: aiawards
+spec:
+  selector:
+    app: aiawards-minio
+  ports:
+    - name: s3
+      port: 9000
+      targetPort: s3
+    - name: console
+      port: 9001
+      targetPort: console
+---
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: aiawards-minio
+  labels:
+    app.kubernetes.io/part-of: aiawards
+  annotations:
+    haproxy.router.openshift.io/timeout: 120s
+spec:
+  to:
+    kind: Service
+    name: aiawards-minio
+  port:
+    targetPort: s3
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
+---
+# One-shot: create the `attachments` bucket.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: aiawards-minio-init
+  labels:
+    app.kubernetes.io/part-of: aiawards
+spec:
+  backoffLimit: 4
+  ttlSecondsAfterFinished: 600
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: mc
+          image: quay.io/minio/mc:latest
+          command:
+            - sh
+            - -c
+            - |
+              set -e
+              until mc alias set local http://aiawards-minio:9000 "$AK" "$SK"; do
+                echo "waiting for minio..."; sleep 3
+              done
+              mc mb -p local/attachments || true
+              echo "bucket ready"
+          env:
+            # `mc` writes its config under $HOME, and the arbitrary UID
+            # OpenShift assigns has no home directory it can create.
+            - name: HOME
+              value: /tmp
+            - name: MC_CONFIG_DIR
+              value: /tmp/.mc
+            - name: AK
+              valueFrom:
+                secretKeyRef: { name: aiawards-minio, key: accessKey }
+            - name: SK
+              valueFrom:
+                secretKeyRef: { name: aiawards-minio, key: secretKey }
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            capabilities:
+              drop: ["ALL"]
+            seccompProfile:
+              type: RuntimeDefault

@@ -1,0 +1,36 @@
+# Two images, both built in-cluster from your local source (no local Docker needed).
+#   aiawards          — the Next.js standalone runtime (the Deployment runs this)
+#   aiawards-migrator — the build stage: has the source + tsx + drizzle-kit,
+#                       used by the one-shot migrate/seed Job
+apiVersion: image.openshift.io/v1
+kind: ImageStream
+metadata:
+  name: aiawards
+  labels:
+    app.kubernetes.io/name: aiawards
+    app.kubernetes.io/part-of: aiawards
+spec:
+  lookupPolicy:
+    local: true
+---
+apiVersion: image.openshift.io/v1
+kind: ImageStream
+metadata:
+  name: aiawards-migrator
+  labels:
+    app.kubernetes.io/name: aiawards
+    app.kubernetes.io/part-of: aiawards
+spec:
+  lookupPolicy:
+    local: true
+---
+apiVersion: image.openshift.io/v1
+kind: ImageStream
+metadata:
+  name: aiawards-deps
+  labels:
+    app.kubernetes.io/name: aiawards
+    app.kubernetes.io/part-of: aiawards
+spec:
+  lookupPolicy:
+    local: true

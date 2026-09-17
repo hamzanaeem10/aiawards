@@ -1,0 +1,16 @@
+# The app talks to MinIO over its OpenShift Route, whose certificate is issued
+# by Jazz Issuer CA-1. That CA is not in the UBI image's trust store, so Node
+# rejects the connection with SELF_SIGNED_CERT_IN_CHAIN and every attachment
+# upload fails.
+#
+# This ConfigMap is empty on purpose: the label makes the Cluster Network
+# Operator populate `ca-bundle.crt` with the cluster's trusted CA bundle, which
+# includes the Jazz CA. Mounting it and pointing NODE_EXTRA_CA_CERTS at it
+# teaches Node to trust the route. It stays current automatically if the CA
+# rotates.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: trusted-ca-bundle
+  labels:
+    config.openshift.io/inject-trusted-cabundle: "true"

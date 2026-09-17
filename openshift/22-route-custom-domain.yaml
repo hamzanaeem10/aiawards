@@ -1,0 +1,38 @@
+# Vanity hostname. A CNAME to the cluster is necessary but NOT sufficient: the
+# OpenShift router dispatches on the HTTP Host header, so a hostname with no
+# matching Route gets the router's "Application is not available" page even
+# though DNS resolves correctly.
+#
+# TLS: the router's default wildcard certificate covers *.apps.ocpv2.jazz.com.pk
+# only, so it does NOT match this hostname — browsers will report a certificate
+# name mismatch until a certificate for aiawards.jazz.com.pk is attached below.
+# Plain HTTP is not a workable alternative: the session cookie is issued with
+# `secure` in production, so over HTTP the browser discards it and nobody can
+# sign in at all.
+#
+# To attach the certificate once Jazz PKI issues it:
+#   oc create route edge aiawards-public \
+#     --service=aiawards --port=http \
+#     --hostname=aiawards.jazz.com.pk \
+#     --cert=tls.crt --key=tls.key --ca-cert=ca.crt \
+#     --insecure-policy=Redirect --dry-run=client -o yaml | oc apply -f -
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: aiawards-public
+  labels:
+    app: aiawards
+    app.kubernetes.io/part-of: aiawards
+  annotations:
+    haproxy.router.openshift.io/timeout: 120s
+spec:
+  host: aiawards.jazz.com.pk
+  to:
+    kind: Service
+    name: aiawards
+    weight: 100
+  port:
+    targetPort: http
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect

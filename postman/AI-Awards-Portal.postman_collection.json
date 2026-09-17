@@ -1,0 +1,1255 @@
+{
+  "info": {
+    "_postman_id": "aiawards-portal-v2",
+    "name": "JazzWorld AI Impact Awards Portal",
+    "description": "# AI Awards Portal\n\nOpenShift `ocpv2` / namespace `people-org`\n\n## Read this first\n\nThis is a **server-rendered Next.js application, not a REST API**. There are exactly **three** conventional HTTP endpoints:\n\n| Endpoint | Auth |\n|---|---|\n| `GET /api/health` | none |\n| `GET /admin/export/submissions` | admin |\n| `GET /admin/export/evaluations` | admin |\n\nEverything else is a **page** (GET, returns HTML) or a **server action** (POST to a page URL). Both are covered, and anything that cannot be driven from Postman says so on the request.\n\n## Sign-in flow\n\nNo passwords, no API keys - email one-time code.\n\n```\n/  (public landing)  ->  click Submit an initiative\n                     ->  /login          request code\n                     ->  /login/verify   enter 6-digit code\n                     ->  /submit         (nominee lands here)\n```\n\n1. Set `{{loginEmail}}` to a mailbox you can read\n2. Run **2. Auth / 1. Request sign-in code**\n3. Read the code, set `{{otpCode}}`\n4. Run **2. Auth / 2. Verify code** - Postman stores `aia_session` and reuses it\n\nSessions last **8 hours** and are revoked server-side on sign out. Only `jazz.com.pk` / `jazz.com` addresses may sign in.\n\n## Roles\n\n| Role | Lands on | Can |\n|---|---|---|\n| nominee | `/submit` | submit a nomination |\n| reviewer | `/committee/queue` | score submissions |\n| approver | `/admin` | see aggregates, approve / disapprove |\n| admin | `/admin` | everything except approving |\n\n## Rate limits will stop an automated run\n\n3 codes per address / 15 min - 12 per IP / 15 min - **5 distinct addresses per IP / hour**. Deliberate: it closes ISG finding IDX-001.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "https://aiawards-people-org.apps.ocpv2.jazz.com.pk",
+      "description": "Switch to https://aiawards.jazz.com.pk once its public certificate is installed."
+    },
+    {
+      "key": "loginEmail",
+      "value": "abduhu.khan@jazz.com.pk",
+      "description": "A mailbox you can read. Must be @jazz.com.pk or @jazz.com."
+    },
+    {
+      "key": "otpCode",
+      "value": "",
+      "description": "The 6-digit code from the email."
+    },
+    {
+      "key": "submissionId",
+      "value": "9474fd9c-0b87-4202-87eb-9e3c03849e66"
+    },
+    {
+      "key": "actionId",
+      "value": "",
+      "description": "Filled automatically by pre-request scripts."
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Ops",
+      "description": "Unauthenticated. Use for load-balancer monitoring.",
+      "item": [
+        {
+          "name": "Health check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/health",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "health"
+              ]
+            },
+            "description": "`200 {\"ok\":true}` only when the database is reachable; **`503` otherwise**.\n\nUse as the LB health monitor - a TCP check on 443 reports healthy even when the database is down.\n\nBehind a load balancer, send SNI and Host as `aiawards.jazz.com.pk`."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('database reachable', () => pm.expect(pm.response.json().ok).to.be.true);"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "2. Auth (email OTP)",
+      "description": "Run 1 then 2. The session cookie is stored automatically.",
+      "item": [
+        {
+          "name": "Sign-in page",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "login"
+              ]
+            },
+            "description": "Public. Renders the email form and carries the action id."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('no password field', () => pm.expect(pm.response.text()).to.not.include('type=\"password\"'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "1. Request sign-in code",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "login"
+              ]
+            },
+            "description": "**Server action, not a REST endpoint.** Next.js App Router exposes these as POSTs to the page URL, identified by a hidden `$ACTION_ID_<hash>` field that is **build-scoped** - it changes every deploy. The pre-request script reads the current value into `{{actionId}}`.\n\nThe body **must be `multipart/form-data`**. A urlencoded POST does not invoke the action - it is served as an ordinary page request, which can look like a pass when nothing ran.\n\nEmails a 6-digit code. On success redirects to `/login/verify`; otherwise back to `/login?e=...`:\n\n| `e=` | meaning |\n|---|---|\n| `domain` | address outside the allowed domains |\n| `rate` | 3-per-address limit hit |\n| `iprate` | 5-addresses-per-device limit hit |\n| `send` | SMTP relay unreachable |",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "email",
+                  "value": "{{loginEmail}}",
+                  "type": "text"
+                },
+                {
+                  "key": "$ACTION_ID_{{actionId}}",
+                  "value": "",
+                  "type": "text"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Server-action ids are BUILD-SCOPED - they change on every deploy, so they",
+                  "// cannot be hardcoded. Fetch the page and read the current id.",
+                  "// A page may carry more than one action (the header's Sign out renders",
+                  "// first), so this takes the 'first' one.",
+                  "const base = pm.collectionVariables.get('baseUrl');",
+                  "pm.sendRequest({ url: base + '/login', method: 'GET' }, (err, res) => {",
+                  "  if (err) { console.error('action discovery failed:', err); return; }",
+                  "  const ids = (res.text().match(/\\$ACTION_ID_([a-f0-9]+)/g) || [])",
+                  "    .map(s => s.replace('$ACTION_ID_',''));",
+                  "  if (!ids.length) { console.error('no action id on /login - are you signed in?'); return; }",
+                  "  pm.collectionVariables.set('actionId', ids[0]);",
+                  "  console.log('actionId for /login =', ids[0]);",
+                  "});"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const loc = pm.response.headers.get('location') || '';",
+                  "if (loc.includes('e=iprate')) console.log('THROTTLED: device limit');",
+                  "else if (loc.includes('e=rate')) console.log('THROTTLED: address limit');",
+                  "else if (loc.includes('e=domain')) console.log('REJECTED: domain not allowed');",
+                  "else if (loc.includes('verify')) console.log('Code sent - read the mailbox, set {{otpCode}}');",
+                  "pm.test('accepted or throttled', () => pm.expect(pm.response.code).to.be.oneOf([200,302,303,307]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Verify page",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/login/verify",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "login",
+                "verify"
+              ]
+            },
+            "description": "Needs the short-lived `aia_pending` cookie from step 1. Without it, redirects to `/login`."
+          },
+          "response": []
+        },
+        {
+          "name": "2. Verify code",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/login/verify",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "login",
+                "verify"
+              ]
+            },
+            "description": "**Server action, not a REST endpoint.** Next.js App Router exposes these as POSTs to the page URL, identified by a hidden `$ACTION_ID_<hash>` field that is **build-scoped** - it changes every deploy. The pre-request script reads the current value into `{{actionId}}`.\n\nThe body **must be `multipart/form-data`**. A urlencoded POST does not invoke the action - it is served as an ordinary page request, which can look like a pass when nothing ran.\n\nSet `{{otpCode}}` first. On success issues the `aia_session` cookie (8 hours) and redirects by role: nominee -> `/submit`, reviewer -> `/committee/queue`, admin / approver -> `/admin`.\n\nThe code is single-use, expires in 10 minutes, and is burned after 5 wrong attempts.",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "code",
+                  "value": "{{otpCode}}",
+                  "type": "text"
+                },
+                {
+                  "key": "$ACTION_ID_{{actionId}}",
+                  "value": "",
+                  "type": "text"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Server-action ids are BUILD-SCOPED - they change on every deploy, so they",
+                  "// cannot be hardcoded. Fetch the page and read the current id.",
+                  "// A page may carry more than one action (the header's Sign out renders",
+                  "// first), so this takes the 'last' one.",
+                  "const base = pm.collectionVariables.get('baseUrl');",
+                  "pm.sendRequest({ url: base + '/login/verify', method: 'GET' }, (err, res) => {",
+                  "  if (err) { console.error('action discovery failed:', err); return; }",
+                  "  const ids = (res.text().match(/\\$ACTION_ID_([a-f0-9]+)/g) || [])",
+                  "    .map(s => s.replace('$ACTION_ID_',''));",
+                  "  if (!ids.length) { console.error('no action id on /login/verify - are you signed in?'); return; }",
+                  "  pm.collectionVariables.set('actionId', ids[ids.length - 1]);",
+                  "  console.log('actionId for /login/verify =', ids[ids.length - 1]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Sign out",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": []
+            },
+            "description": "**Server action, not a REST endpoint.** Next.js App Router exposes these as POSTs to the page URL, identified by a hidden `$ACTION_ID_<hash>` field that is **build-scoped** - it changes every deploy. The pre-request script reads the current value into `{{actionId}}`.\n\nThe body **must be `multipart/form-data`**. A urlencoded POST does not invoke the action - it is served as an ordinary page request, which can look like a pass when nothing ran.\n\nRevokes the session **server-side**: the token's `jti` is recorded and refused thereafter (ISG finding IDX-005). Replaying a captured cookie afterwards redirects to `/login`.",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "$ACTION_ID_{{actionId}}",
+                  "value": "",
+                  "type": "text"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Server-action ids are BUILD-SCOPED - they change on every deploy, so they",
+                  "// cannot be hardcoded. Fetch the page and read the current id.",
+                  "// A page may carry more than one action (the header's Sign out renders",
+                  "// first), so this takes the 'last' one.",
+                  "const base = pm.collectionVariables.get('baseUrl');",
+                  "pm.sendRequest({ url: base + '/', method: 'GET' }, (err, res) => {",
+                  "  if (err) { console.error('action discovery failed:', err); return; }",
+                  "  const ids = (res.text().match(/\\$ACTION_ID_([a-f0-9]+)/g) || [])",
+                  "    .map(s => s.replace('$ACTION_ID_',''));",
+                  "  if (!ids.length) { console.error('no action id on / - are you signed in?'); return; }",
+                  "  pm.collectionVariables.set('actionId', ids[ids.length - 1]);",
+                  "  console.log('actionId for / =', ids[ids.length - 1]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "3. Public",
+      "description": "No session required.",
+      "item": [
+        {
+          "name": "Landing page",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": []
+            },
+            "description": "**Public.** The front door: hero plus the *Submit an initiative* call to action. Shows a **Sign in** link when signed out, and name + **Sign out** when signed in."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('public - hero served without a session', () =>",
+                  "  pm.expect(pm.response.text()).to.include('Submit an initiative'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Submission status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/status/{{submissionId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "status",
+                "{{submissionId}}"
+              ]
+            },
+            "description": "**Capability URL** - needs the submission UUID but no session, so a nominee can open it from a link. Unknown or malformed ids return 404."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 for a known id, 404 otherwise', () => pm.expect(pm.response.code).to.be.oneOf([200,404]));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "4. Nominee",
+      "description": "Requires a signed-in session.",
+      "item": [
+        {
+          "name": "Submission form",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/submit",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "submit"
+              ]
+            },
+            "description": "Requires a session; anonymous visitors are redirected to `/login`."
+          },
+          "response": []
+        },
+        {
+          "name": "Create submission",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/submit",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "submit"
+              ]
+            },
+            "description": "**Server action, not a REST endpoint.** Next.js App Router exposes these as POSTs to the page URL, identified by a hidden `$ACTION_ID_<hash>` field that is **build-scoped** - it changes every deploy. The pre-request script reads the current value into `{{actionId}}`.\n\nThe body **must be `multipart/form-data`**. A urlencoded POST does not invoke the action - it is served as an ordinary page request, which can look like a pass when nothing ran.\n\n**Requires a session** - the action authorises itself, not merely via the page guard (ISG IDX-005 follow-up). `submitterEmail` must be an allowed domain or it is rejected with `303 /submit?e=domain` (VULN-004).\n\nSuccess: `303 -> /status/<new id>`. Submissions are attributed to the signed-in user.\n\nFile attachments are omitted here - object storage is currently blocked by egress policy.\n\n### Team members (Section 2)\n\n`submissionType` is `Individual` or `Team`. Team members are **parallel repeated fields** \u2014 send `teamMemberName` and `teamMemberContribution` once per row, in matching order; the server zips them and drops any row with a blank name.\n\nContribution must be one of `Ideation`, `Development`, `Ideation and Development` \u2014 anything else is discarded server-side.\n\nWith `submissionType=Individual` the list is stored as `[]` **regardless of what you post**, so the rows above are ignored in that case.\n\nThis replaces the former single `teamMembers` free-text field. Submissions filed before the change still hold that string and continue to render.",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "initiativeName",
+                  "value": "Postman test initiative",
+                  "type": "text"
+                },
+                {
+                  "key": "theme",
+                  "value": "Consumer",
+                  "type": "text"
+                },
+                {
+                  "key": "functionArea",
+                  "value": "Technology",
+                  "type": "text"
+                },
+                {
+                  "key": "useCaseStage",
+                  "value": "Implemented",
+                  "type": "text"
+                },
+                {
+                  "key": "submitterName",
+                  "value": "Postman",
+                  "type": "text"
+                },
+                {
+                  "key": "submitterEmail",
+                  "value": "{{loginEmail}}",
+                  "type": "text"
+                },
+                {
+                  "key": "sponsorName",
+                  "value": "Sponsor",
+                  "type": "text"
+                },
+                {
+                  "key": "sponsorRole",
+                  "value": "Head",
+                  "type": "text"
+                },
+                {
+                  "key": "challenge",
+                  "value": "Business challenge.",
+                  "type": "text"
+                },
+                {
+                  "key": "solution",
+                  "value": "AI solution.",
+                  "type": "text"
+                },
+                {
+                  "key": "aiTech",
+                  "value": "Machine Learning / Predictive",
+                  "type": "text"
+                },
+                {
+                  "key": "targetUsers",
+                  "value": "Target users",
+                  "type": "text"
+                },
+                {
+                  "key": "whatsNew",
+                  "value": "What is new",
+                  "type": "text"
+                },
+                {
+                  "key": "impact",
+                  "value": "Reported impact",
+                  "type": "text"
+                },
+                {
+                  "key": "financialImpact",
+                  "value": "Reported financial impact",
+                  "type": "text"
+                },
+                {
+                  "key": "keyMetrics",
+                  "value": "Key metrics",
+                  "type": "text"
+                },
+                {
+                  "key": "evidenceStage",
+                  "value": "Measured results",
+                  "type": "text"
+                },
+                {
+                  "key": "responsibleAI",
+                  "value": "Responsible AI controls",
+                  "type": "text"
+                },
+                {
+                  "key": "scalability",
+                  "value": "Scalability",
+                  "type": "text"
+                },
+                {
+                  "key": "adoptionReadiness",
+                  "value": "Ready",
+                  "type": "text"
+                },
+                {
+                  "key": "demoVideoUrl",
+                  "value": "",
+                  "type": "text"
+                },
+                {
+                  "key": "liveLink",
+                  "value": "",
+                  "type": "text"
+                },
+                {
+                  "key": "repoLink",
+                  "value": "",
+                  "type": "text"
+                },
+                {
+                  "key": "additionalInfo",
+                  "value": "",
+                  "type": "text"
+                },
+                {
+                  "key": "submissionType",
+                  "value": "Team",
+                  "type": "text"
+                },
+                {
+                  "key": "teamMemberName",
+                  "value": "Asha Rahman",
+                  "type": "text"
+                },
+                {
+                  "key": "teamMemberContribution",
+                  "value": "Ideation",
+                  "type": "text"
+                },
+                {
+                  "key": "teamMemberName",
+                  "value": "Bilal Ahmed",
+                  "type": "text"
+                },
+                {
+                  "key": "teamMemberContribution",
+                  "value": "Ideation and Development",
+                  "type": "text"
+                },
+                {
+                  "key": "$ACTION_ID_{{actionId}}",
+                  "value": "",
+                  "type": "text"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Server-action ids are BUILD-SCOPED - they change on every deploy, so they",
+                  "// cannot be hardcoded. Fetch the page and read the current id.",
+                  "// A page may carry more than one action (the header's Sign out renders",
+                  "// first), so this takes the 'last' one.",
+                  "const base = pm.collectionVariables.get('baseUrl');",
+                  "pm.sendRequest({ url: base + '/submit', method: 'GET' }, (err, res) => {",
+                  "  if (err) { console.error('action discovery failed:', err); return; }",
+                  "  const ids = (res.text().match(/\\$ACTION_ID_([a-f0-9]+)/g) || [])",
+                  "    .map(s => s.replace('$ACTION_ID_',''));",
+                  "  if (!ids.length) { console.error('no action id on /submit - are you signed in?'); return; }",
+                  "  pm.collectionVariables.set('actionId', ids[ids.length - 1]);",
+                  "  console.log('actionId for /submit =', ids[ids.length - 1]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "5. Committee (reviewer / admin)",
+      "description": "Roles `reviewer` and `admin`. Approvers are excluded.",
+      "item": [
+        {
+          "name": "Committee entry point",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/committee",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "committee"
+              ]
+            },
+            "description": "Convenience redirect: reviewer -> `/committee/queue`, admin -> `/admin`, otherwise -> `/login`. Always a redirect, never a page."
+          },
+          "response": []
+        },
+        {
+          "name": "Evaluation queue",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/committee/queue",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "committee",
+                "queue"
+              ]
+            },
+            "description": "Paginated, 40 per page. `?page=2` for later pages."
+          },
+          "response": []
+        },
+        {
+          "name": "Evaluate a submission",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/committee/evaluate/{{submissionId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "committee",
+                "evaluate",
+                "{{submissionId}}"
+              ]
+            },
+            "description": "Full submission, demo video, attachments and the scoring form. Malformed ids return 404."
+          },
+          "response": []
+        },
+        {
+          "name": "Record assessment (UI only)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/committee/evaluate/{{submissionId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "committee",
+                "evaluate",
+                "{{submissionId}}"
+              ]
+            },
+            "description": "**Not callable from Postman.** This action is invoked from a client component with **bound arguments**, which Next encodes into the action reference rather than sending as form fields. Reproducing that by hand is impractical and brittle - exercise it through the UI.\n\nThis request simply loads the related page.\n\n`recordAssessment(submissionId, formData)` takes a bound submission id. It is the **only writer** of the `evaluations` table and the only thing that advances a submission's lifecycle."
+          },
+          "response": []
+        },
+        {
+          "name": "Run AI assessment (UI only)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/committee/evaluate/{{submissionId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "committee",
+                "evaluate",
+                "{{submissionId}}"
+              ]
+            },
+            "description": "**Not callable from Postman.** This action is invoked from a client component with **bound arguments**, which Next encodes into the action reference rather than sending as form fields. Reproducing that by hand is impractical and brittle - exercise it through the UI.\n\nThis request simply loads the related page.\n\n`runAiAssessment(submissionId)` is a **supplementary** second opinion - it never writes to `evaluations` or the lifecycle. Hidden unless an AI provider key is configured; currently disabled because the provider is blocked by egress policy."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "6. Admin / Approver",
+      "description": "`/admin` is open to admin and approver. Everything else is admin-only.",
+      "item": [
+        {
+          "name": "Admin dashboard",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/admin",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin"
+              ]
+            },
+            "description": "Panel averages, evaluator x criterion matrix, evaluator notes and approval decisions. Paginated, 25 per page (`?page=2`).\n\nApprovers see the same view plus an Approve / Disapprove control; admins see the decisions but cannot approve."
+          },
+          "response": []
+        },
+        {
+          "name": "Manage evaluators",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/admin/users",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "users"
+              ]
+            },
+            "description": "**Admin only.** Approvers are redirected."
+          },
+          "response": []
+        },
+        {
+          "name": "Export submissions (CSV)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/admin/export/submissions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "export",
+                "submissions"
+              ]
+            },
+            "description": "**Admin only.** Real route handler. `text/csv`, includes panel averages."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('is CSV', () => pm.expect(pm.response.headers.get('content-type')||'').to.include('csv'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Export evaluations (CSV)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/admin/export/evaluations",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "export",
+                "evaluations"
+              ]
+            },
+            "description": "**Admin only.** Real route handler. `text/csv`, one row per evaluation."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('is CSV', () => pm.expect(pm.response.headers.get('content-type')||'').to.include('csv'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Record approval",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/admin",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin"
+              ]
+            },
+            "description": "**Server action, not a REST endpoint.** Next.js App Router exposes these as POSTs to the page URL, identified by a hidden `$ACTION_ID_<hash>` field that is **build-scoped** - it changes every deploy. The pre-request script reads the current value into `{{actionId}}`.\n\nThe body **must be `multipart/form-data`**. A urlencoded POST does not invoke the action - it is served as an ordinary page request, which can look like a pass when nothing ran.\n\n**Approver role only.** One decision per approver per submission - re-submitting revises it rather than adding a row (enforced by a unique index).\n\n`decision` must be `approved` or `disapproved`. This never changes the panel score or the lifecycle status.",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "submissionId",
+                  "value": "{{submissionId}}",
+                  "type": "text"
+                },
+                {
+                  "key": "decision",
+                  "value": "approved",
+                  "type": "text"
+                },
+                {
+                  "key": "notes",
+                  "value": "Recorded via Postman.",
+                  "type": "text"
+                },
+                {
+                  "key": "$ACTION_ID_{{actionId}}",
+                  "value": "",
+                  "type": "text"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Server-action ids are BUILD-SCOPED - they change on every deploy, so they",
+                  "// cannot be hardcoded. Fetch the page and read the current id.",
+                  "// A page may carry more than one action (the header's Sign out renders",
+                  "// first), so this takes the 'last' one.",
+                  "const base = pm.collectionVariables.get('baseUrl');",
+                  "pm.sendRequest({ url: base + '/admin', method: 'GET' }, (err, res) => {",
+                  "  if (err) { console.error('action discovery failed:', err); return; }",
+                  "  const ids = (res.text().match(/\\$ACTION_ID_([a-f0-9]+)/g) || [])",
+                  "    .map(s => s.replace('$ACTION_ID_',''));",
+                  "  if (!ids.length) { console.error('no action id on /admin - are you signed in?'); return; }",
+                  "  pm.collectionVariables.set('actionId', ids[ids.length - 1]);",
+                  "  console.log('actionId for /admin =', ids[ids.length - 1]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create / reset / deactivate reviewer (UI only)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/admin/users",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "users"
+              ]
+            },
+            "description": "**Not callable from Postman.** This action is invoked from a client component with **bound arguments**, which Next encodes into the action reference rather than sending as form fields. Reproducing that by hand is impractical and brittle - exercise it through the UI.\n\nThis request simply loads the related page.\n\n`createReviewer`, `resetReviewerPassword` and `setReviewerActive` take structured arguments.\n\nReviewer and approver roles are normally granted by configuration (`REVIEWER_EMAILS`, `APPROVER_EMAILS`), not through this screen."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "7. Security regression (ISG re-test)",
+      "description": "Runnable assertions for the ISG findings of 9-Sep-2026. Clear cookies before running, except where a request says otherwise.",
+      "item": [
+        {
+          "name": "IDX-003 / VULN-002 - security headers",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "login"
+              ]
+            },
+            "description": "Verifies HSTS and the anti-clickjacking headers."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('IDX-003: HSTS', () => pm.expect(pm.response.headers.get('strict-transport-security')||'').to.include('max-age=31536000'));",
+                  "pm.test('VULN-002: X-Frame-Options DENY', () => pm.expect(pm.response.headers.get('x-frame-options')).to.eql('DENY'));",
+                  "pm.test('VULN-002: CSP frame-ancestors none', () => pm.expect(pm.response.headers.get('content-security-policy')||'').to.include(\"frame-ancestors 'none'\"));",
+                  "pm.test('nosniff', () => pm.expect(pm.response.headers.get('x-content-type-options')).to.eql('nosniff'));",
+                  "pm.test('Referrer-Policy', () => pm.expect(pm.response.headers.get('referrer-policy')||'').to.include('strict-origin'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "IDX-005 - unauthenticated submit refused",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/submit",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "submit"
+              ]
+            },
+            "description": "Replays the finding: `POST /submit` with **no session cookie**.\n\nExpected `303 -> /login` and **no submission created** - confirm nothing named `ISG-retest` appears in `/admin`.\n\n**Clear cookies before running.**",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "initiativeName",
+                  "value": "ISG-retest-unauthenticated",
+                  "type": "text"
+                },
+                {
+                  "key": "theme",
+                  "value": "Consumer",
+                  "type": "text"
+                },
+                {
+                  "key": "functionArea",
+                  "value": "Technology",
+                  "type": "text"
+                },
+                {
+                  "key": "useCaseStage",
+                  "value": "Implemented",
+                  "type": "text"
+                },
+                {
+                  "key": "submitterName",
+                  "value": "ISG",
+                  "type": "text"
+                },
+                {
+                  "key": "submitterEmail",
+                  "value": "{{loginEmail}}",
+                  "type": "text"
+                },
+                {
+                  "key": "sponsorName",
+                  "value": "S",
+                  "type": "text"
+                },
+                {
+                  "key": "sponsorRole",
+                  "value": "R",
+                  "type": "text"
+                },
+                {
+                  "key": "challenge",
+                  "value": "c",
+                  "type": "text"
+                },
+                {
+                  "key": "solution",
+                  "value": "s",
+                  "type": "text"
+                },
+                {
+                  "key": "targetUsers",
+                  "value": "t",
+                  "type": "text"
+                },
+                {
+                  "key": "whatsNew",
+                  "value": "n",
+                  "type": "text"
+                },
+                {
+                  "key": "$ACTION_ID_{{actionId}}",
+                  "value": "",
+                  "type": "text"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Server-action ids are BUILD-SCOPED - they change on every deploy, so they",
+                  "// cannot be hardcoded. Fetch the page and read the current id.",
+                  "// A page may carry more than one action (the header's Sign out renders",
+                  "// first), so this takes the 'last' one.",
+                  "const base = pm.collectionVariables.get('baseUrl');",
+                  "pm.sendRequest({ url: base + '/submit', method: 'GET' }, (err, res) => {",
+                  "  if (err) { console.error('action discovery failed:', err); return; }",
+                  "  const ids = (res.text().match(/\\$ACTION_ID_([a-f0-9]+)/g) || [])",
+                  "    .map(s => s.replace('$ACTION_ID_',''));",
+                  "  if (!ids.length) { console.error('no action id on /submit - are you signed in?'); return; }",
+                  "  pm.collectionVariables.set('actionId', ids[ids.length - 1]);",
+                  "  console.log('actionId for /submit =', ids[ids.length - 1]);",
+                  "});"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('IDX-005: refused to /login', () => {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([302,303,307]);",
+                  "  pm.expect(pm.response.headers.get('location')||'').to.include('/login');",
+                  "});",
+                  "pm.test('no confirmation in body', () => pm.expect(pm.response.text()).to.not.include('Received'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "VULN-004 - external email domain refused",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/submit",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "submit"
+              ]
+            },
+            "description": "**Requires a valid session.** Submits with `jazztest@yopmail.com`.\n\nExpected `303 -> /submit?e=domain`, nothing written.",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "initiativeName",
+                  "value": "ISG-retest-domain",
+                  "type": "text"
+                },
+                {
+                  "key": "theme",
+                  "value": "Consumer",
+                  "type": "text"
+                },
+                {
+                  "key": "functionArea",
+                  "value": "Technology",
+                  "type": "text"
+                },
+                {
+                  "key": "useCaseStage",
+                  "value": "Implemented",
+                  "type": "text"
+                },
+                {
+                  "key": "submitterName",
+                  "value": "ISG",
+                  "type": "text"
+                },
+                {
+                  "key": "submitterEmail",
+                  "value": "jazztest@yopmail.com",
+                  "type": "text"
+                },
+                {
+                  "key": "sponsorName",
+                  "value": "S",
+                  "type": "text"
+                },
+                {
+                  "key": "sponsorRole",
+                  "value": "R",
+                  "type": "text"
+                },
+                {
+                  "key": "challenge",
+                  "value": "c",
+                  "type": "text"
+                },
+                {
+                  "key": "solution",
+                  "value": "s",
+                  "type": "text"
+                },
+                {
+                  "key": "targetUsers",
+                  "value": "t",
+                  "type": "text"
+                },
+                {
+                  "key": "whatsNew",
+                  "value": "n",
+                  "type": "text"
+                },
+                {
+                  "key": "$ACTION_ID_{{actionId}}",
+                  "value": "",
+                  "type": "text"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Server-action ids are BUILD-SCOPED - they change on every deploy, so they",
+                  "// cannot be hardcoded. Fetch the page and read the current id.",
+                  "// A page may carry more than one action (the header's Sign out renders",
+                  "// first), so this takes the 'last' one.",
+                  "const base = pm.collectionVariables.get('baseUrl');",
+                  "pm.sendRequest({ url: base + '/submit', method: 'GET' }, (err, res) => {",
+                  "  if (err) { console.error('action discovery failed:', err); return; }",
+                  "  const ids = (res.text().match(/\\$ACTION_ID_([a-f0-9]+)/g) || [])",
+                  "    .map(s => s.replace('$ACTION_ID_',''));",
+                  "  if (!ids.length) { console.error('no action id on /submit - are you signed in?'); return; }",
+                  "  pm.collectionVariables.set('actionId', ids[ids.length - 1]);",
+                  "  console.log('actionId for /submit =', ids[ids.length - 1]);",
+                  "});"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('VULN-004: rejected with e=domain', () => pm.expect(pm.response.headers.get('location')||'').to.include('e=domain'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "IDX-001 - OTP enumeration throttled",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "login"
+              ]
+            },
+            "description": "Run **9 iterations** in the Collection Runner.\n\nExpected: the first 5 issue a code, the 6th onward redirect to `/login?e=iprate`. The original report showed payload #6036 still succeeding.\n\n**Each success sends real email** to a throwaway address - expect bounces.",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "email",
+                  "value": "isg.retest.{{$randomInt}}@jazz.com.pk",
+                  "type": "text"
+                },
+                {
+                  "key": "$ACTION_ID_{{actionId}}",
+                  "value": "",
+                  "type": "text"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Server-action ids are BUILD-SCOPED - they change on every deploy, so they",
+                  "// cannot be hardcoded. Fetch the page and read the current id.",
+                  "// A page may carry more than one action (the header's Sign out renders",
+                  "// first), so this takes the 'first' one.",
+                  "const base = pm.collectionVariables.get('baseUrl');",
+                  "pm.sendRequest({ url: base + '/login', method: 'GET' }, (err, res) => {",
+                  "  if (err) { console.error('action discovery failed:', err); return; }",
+                  "  const ids = (res.text().match(/\\$ACTION_ID_([a-f0-9]+)/g) || [])",
+                  "    .map(s => s.replace('$ACTION_ID_',''));",
+                  "  if (!ids.length) { console.error('no action id on /login - are you signed in?'); return; }",
+                  "  pm.collectionVariables.set('actionId', ids[0]);",
+                  "  console.log('actionId for /login =', ids[0]);",
+                  "});"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const loc = pm.response.headers.get('location')||'';",
+                  "const blocked = loc.includes('e=iprate');",
+                  "const n = (pm.collectionVariables.get('isgCount')||0)*1 + 1;",
+                  "pm.collectionVariables.set('isgCount', n);",
+                  "console.log('attempt '+n+' -> '+(blocked?'BLOCKED (device limit)':'code issued'));",
+                  "if (n > 5) pm.test('IDX-001: attempt '+n+' throttled', () => pm.expect(blocked).to.be.true);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "IDX-006 - session lifetime is 8 hours",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "login"
+              ]
+            },
+            "description": "Informational. Sign in, then decode the `aia_session` cookie at jwt.io: `exp - iat` must be **28800 seconds (8h)**. It was 604800 (7 days) at the time of the report.\n\nThe token also carries a `jti`, which is what makes server-side revocation possible."
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}
